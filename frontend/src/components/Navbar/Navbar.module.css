@@ -1,0 +1,113 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--ev-navbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background-color: var(--ev-surface);
+  border-bottom: 1px solid var(--ev-border-color);
+}
+
+.left,
+.right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.logoMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--ev-white);
+  background: linear-gradient(135deg, var(--ev-primary), var(--ev-accent));
+}
+
+.logoText {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--ev-text);
+}
+
+.logoAccent {
+  color: var(--ev-accent);
+}
+
+.roleBadge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--ev-primary);
+  background-color: var(--ev-primary-soft);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ev-white);
+  background-color: var(--ev-accent);
+}
+
+.menuButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ev-border-color);
+  border-radius: var(--ev-radius-sm);
+  background-color: var(--ev-surface);
+  cursor: pointer;
+  padding: 0;
+}
+
+.menuButton:hover {
+  background-color: var(--ev-gray-100);
+}
+
+.menuIcon {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menuIcon span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background-color: var(--ev-gray-700);
+}
+
+/* En móvil/tablet mostramos el botón de menú */
+@media (max-width: 900px) {
+  .menuButton {
+    display: inline-flex;
+  }
+  .navbar {
+    padding: 0 16px;
+  }
+}

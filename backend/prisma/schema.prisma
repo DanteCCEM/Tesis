@@ -1,0 +1,232 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===================== ENUMS =====================
+
+enum Rol {
+  DOCENTE
+  ESTUDIANTE
+}
+
+enum NivelDificultad {
+  BASICO
+  INTERMEDIO
+  AVANZADO
+}
+
+enum EstadoEvaluacion {
+  BORRADOR
+  PUBLICADA
+  CERRADA
+}
+
+enum TipoPregunta {
+  OPCION_MULTIPLE
+  VERDADERO_FALSO
+  RESPUESTA_CORTA
+}
+
+enum EstadoIntento {
+  EN_PROGRESO
+  FINALIZADO
+}
+
+enum EstadoPracticaAdaptativa {
+  PENDIENTE
+  EN_CURSO
+  COMPLETADA
+}
+
+// ===================== MODELOS =====================
+
+model Usuario {
+  id                   Int      @id @default(autoincrement())
+  nombres              String
+  correo               String   @unique
+  contrasena           String // almacenada cifrada (bcrypt)
+  rol                  Rol
+  fotoPerfil           String?
+  telefono             String?
+  institucionEducativa String?
+  biografiaCorta       String?
+  createdAt            DateTime @default(now())
+
+  // Relaciones como DOCENTE
+  cursos       Curso[]
+  evaluaciones Evaluacion[]
+
+  // Relaciones como ESTUDIANTE
+  matriculas            Matricula[]
+  intentos              IntentoEvaluacion[]
+  progresos             ProgresoEstudiante[]
+  practicasAdaptativas  PracticaAdaptativa[]
+  evaluacionesObjetivo  Evaluacion[]         @relation("PracticasObjetivo")
+}
+
+model Curso {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  grado       String
+  seccion     String
+  descripcion String?
+  createdAt   DateTime @default(now())
+
+  docenteId Int
+  docente   Usuario @relation(fields: [docenteId], references: [id])
+
+  matriculas           Matricula[]
+  evaluaciones         Evaluacion[]
+  progresos            ProgresoEstudiante[]
+  practicasAdaptativas PracticaAdaptativa[]
+}
+
+model Matricula {
+  id             Int      @id @default(autoincrement())
+  fechaMatricula DateTime @default(now())
+
+  estudianteId Int
+  estudiante   Usuario @relation(fields: [estudianteId], references: [id])
+
+  cursoId Int
+  curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@unique([estudianteId, cursoId])
+}
+
+model Evaluacion {
+  id              Int              @id @default(autoincrement())
+  titulo          String
+  tema            String
+  subtema         String?
+  nivelDificultad NivelDificultad
+  fechaLimite     DateTime?
+  estado              EstadoEvaluacion @default(BORRADOR)
+  esPracticaAdaptativa Boolean         @default(false)
+  estudianteObjetivoId Int?
+  createdAt           DateTime         @default(now())
+
+  cursoId Int
+  curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  docenteId Int
+  docente   Usuario @relation(fields: [docenteId], references: [id])
+
+  estudianteObjetivo Usuario? @relation("PracticasObjetivo", fields: [estudianteObjetivoId], references: [id])
+
+  preguntas          Pregunta[]
+  intentos           IntentoEvaluacion[]
+  practicaAdaptativa PracticaAdaptativa?
+}
+
+model Pregunta {
+  id               Int             @id @default(autoincrement())
+  enunciado        String
+  tipo             TipoPregunta
+  dificultad       NivelDificultad
+  tema             String
+  respuestaCorrecta String?
+  puntaje          Float           @default(1)
+
+  evaluacionId Int
+  evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+
+  alternativas Alternativa[]
+  respuestas   RespuestaEstudiante[]
+}
+
+model Alternativa {
+  id         Int     @id @default(autoincrement())
+  texto      String
+  esCorrecta Boolean @default(false)
+
+  preguntaId Int
+  pregunta   Pregunta @relation(fields: [preguntaId], references: [id], onDelete: Cascade)
+
+  respuestas RespuestaEstudiante[]
+}
+
+model IntentoEvaluacion {
+  id            Int             @id @default(autoincrement())
+  fechaInicio   DateTime        @default(now())
+  fechaFin      DateTime?
+  puntajeTotal  Float           @default(0)
+  porcentaje    Float           @default(0)
+  nivelObtenido NivelDificultad?
+  estado        EstadoIntento   @default(EN_PROGRESO)
+  retroalimentacionIA Json?
+
+  estudianteId Int
+  estudiante   Usuario @relation(fields: [estudianteId], references: [id])
+
+  evaluacionId Int
+  evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+
+  respuestas RespuestaEstudiante[]
+
+  @@unique([estudianteId, evaluacionId])
+}
+
+model RespuestaEstudiante {
+  id               Int      @id @default(autoincrement())
+  respuestaTexto   String?
+  esCorrecta       Boolean  @default(false)
+  puntajeObtenido  Float    @default(0)
+  retroalimentacion String?
+
+  intentoId Int
+  intento   IntentoEvaluacion @relation(fields: [intentoId], references: [id], onDelete: Cascade)
+
+  preguntaId Int
+  pregunta   Pregunta @relation(fields: [preguntaId], references: [id], onDelete: Cascade)
+
+  alternativaId Int?
+  alternativa   Alternativa? @relation(fields: [alternativaId], references: [id])
+}
+
+model ProgresoEstudiante {
+  id                Int             @id @default(autoincrement())
+  tema              String
+  nivelActual       NivelDificultad @default(BASICO)
+  porcentajeDominio Float           @default(0)
+  recomendaciones   String?
+  updatedAt         DateTime        @updatedAt
+
+  estudianteId Int
+  estudiante   Usuario @relation(fields: [estudianteId], references: [id])
+
+  cursoId Int
+  curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@unique([estudianteId, cursoId, tema])
+}
+
+model PracticaAdaptativa {
+  id                Int                      @id @default(autoincrement())
+  tema              String
+  dificultad        NivelDificultad
+  estado            EstadoPracticaAdaptativa @default(PENDIENTE)
+  motivoResumen     Json
+  cantidadPreguntas Int                      @default(5)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  estudianteId Int
+  estudiante   Usuario @relation(fields: [estudianteId], references: [id])
+
+  cursoId Int
+  curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  evaluacionId Int        @unique
+  evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+}

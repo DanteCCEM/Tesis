@@ -1,0 +1,41 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  background-color: var(--ev-bg);
+  color: var(--ev-text);
+}
+
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  position: relative;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 32px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.overlay {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .content {
+    padding: 20px 16px;
+  }
+  .overlay {
+    display: block;
+    position: fixed;
+    inset: var(--ev-navbar-height) 0 0 0;
+    z-index: 20;
+    background-color: rgba(15, 23, 42, 0.4);
+  }
+}

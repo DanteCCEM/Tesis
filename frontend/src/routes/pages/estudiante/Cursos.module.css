@@ -1,0 +1,299 @@
+/* Estados: carga, error y vacío */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 56px 24px;
+  background-color: var(--ev-surface);
+  border: 1px dashed var(--ev-border-color);
+  border-radius: var(--ev-radius);
+  color: var(--ev-text-muted);
+}
+
+.stateTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ev-text);
+}
+
+.stateText {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ev-text-muted);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--ev-gray-200);
+  border-top-color: var(--ev-primary);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.stateError {
+  border-style: solid;
+  border-color: #fecaca;
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+.stateError .stateTitle {
+  color: #b91c1c;
+}
+
+/* Grid de cursos */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 20px;
+}
+
+.courseCard {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-border-color);
+  border-radius: var(--ev-radius);
+  box-shadow: var(--ev-shadow-sm);
+  overflow: hidden;
+  transition: box-shadow 0.18s ease;
+}
+
+.courseCard:hover {
+  box-shadow: var(--ev-shadow-md);
+}
+
+.banner {
+  height: 8px;
+  background: linear-gradient(120deg, var(--ev-primary), var(--ev-accent));
+}
+
+.courseBody {
+  padding: 18px 18px 0;
+  flex: 1 1 auto;
+}
+
+.courseName {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ev-text);
+}
+
+.teacher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--ev-text-muted);
+}
+
+.teacher svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Barra de progreso */
+.progressHead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--ev-text-muted);
+  margin-bottom: 6px;
+}
+
+.progressHead strong {
+  color: var(--ev-text);
+}
+
+.progressTrack {
+  height: 7px;
+  border-radius: 999px;
+  background-color: var(--ev-gray-200);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(120deg, var(--ev-primary), var(--ev-accent));
+  transition: width 0.3s ease;
+}
+
+.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ev-text);
+  margin-bottom: 16px;
+}
+
+.pendingDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: var(--ev-accent);
+}
+
+.actions {
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--ev-gray-100);
+}
+
+/* Detalle de curso */
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.subjectGroup {
+  margin-top: 8px;
+}
+
+.subjectTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ev-text);
+  margin: 0 0 12px;
+}
+
+.subjectCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev-text-muted);
+}
+
+.evalRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--ev-gray-100);
+}
+
+.evalRow:last-child {
+  border-bottom: none;
+}
+
+.evalIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: var(--ev-radius-sm);
+}
+
+.evalIconAvailable {
+  background-color: var(--ev-accent-soft);
+  color: var(--ev-accent);
+}
+
+.evalIconDone {
+  background-color: #f0fdf4;
+  color: #15803d;
+}
+
+.evalIcon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.evalInfo {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.evalName {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ev-text);
+}
+
+.evalMeta {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--ev-text-muted);
+}
+
+.evalActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.statusCompleted {
+  font-size: 12px;
+  font-weight: 700;
+  color: #15803d;
+  background-color: #f0fdf4;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.actionNotice {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: var(--ev-radius-sm);
+  border: 1px solid #fecaca;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+.scoreBadge {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: #15803d;
+  background-color: #f0fdf4;
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--ev-text-muted);
+  padding: 4px 0 8px;
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--ev-border-color);
+  margin: 22px 0;
+}
+
+@media (max-width: 560px) {
+  .evalRow {
+    flex-wrap: wrap;
+  }
+  .evalActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

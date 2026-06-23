@@ -1,0 +1,268 @@
+/* Perfil compartido docente / estudiante */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 56px 24px;
+  background-color: var(--ev-surface);
+  border: 1px dashed var(--ev-border-color);
+  border-radius: var(--ev-radius);
+  color: var(--ev-text-muted);
+}
+
+.stateTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ev-text);
+}
+
+.stateText {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ev-text-muted);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--ev-gray-200);
+  border-top-color: var(--ev-primary);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.stateError {
+  border-style: solid;
+  border-color: #fecaca;
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+.stateError .stateTitle {
+  color: #b91c1c;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.profileCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 20px;
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-border-color);
+  border-radius: var(--ev-radius);
+  box-shadow: var(--ev-shadow-sm);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--ev-white);
+  background-color: var(--ev-accent);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ev-text);
+}
+
+.role {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ev-text-muted);
+}
+
+.institution {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ev-text-muted);
+}
+
+.bio {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ev-text-muted);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.statCard {
+  padding: 16px;
+  background-color: var(--ev-surface);
+  border: 1px solid var(--ev-border-color);
+  border-radius: var(--ev-radius);
+  box-shadow: var(--ev-shadow-sm);
+}
+
+.statValue {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ev-text);
+  line-height: 1.1;
+}
+
+.statLabel {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ev-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fieldFull {
+  grid-column: 1 / -1;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ev-gray-700);
+}
+
+.input,
+.textarea {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: var(--ev-radius-sm);
+  border: 1px solid var(--ev-gray-300);
+  background-color: var(--ev-surface);
+  color: var(--ev-text);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--ev-primary);
+  box-shadow: 0 0 0 3px var(--ev-primary-soft);
+}
+
+.inputError {
+  border-color: #dc2626;
+}
+
+.errorText {
+  font-size: 12.5px;
+  color: #dc2626;
+}
+
+.formError {
+  font-size: 13.5px;
+  color: #dc2626;
+  padding: 10px 12px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--ev-radius-sm);
+}
+
+.success {
+  font-size: 13.5px;
+  color: #15803d;
+  padding: 10px 12px;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--ev-radius-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.topicList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.topicTag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #b91c1c;
+  background-color: #fef2f2;
+}
+
+.emptyText {
+  font-size: 13.5px;
+  color: var(--ev-text-muted);
+  margin: 8px 0 0;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .stats {
+    grid-template-columns: 1fr;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

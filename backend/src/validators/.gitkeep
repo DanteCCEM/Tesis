@@ -1,0 +1,2 @@
+# Carpeta para esquemas de validación de entrada (p. ej. con express-validator o zod).
+# Sugerencia: un archivo por recurso, como auth.validator.js, cursos.validator.js, etc.
