@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
+const planCurricularService = require("./planCurricular.service");
 
 // Verifica que el curso exista y pertenezca al docente indicado.
 const verificarCursoPropio = async (cursoId, docenteId) => {
@@ -64,6 +65,12 @@ const evaluacionesService = {
 
     const nivel = datos.dificultad ?? datos.nivelDificultad;
 
+    const refs = await planCurricularService.validarReferenciasEvaluacion(
+      cursoId,
+      datos.temaCurricularId,
+      datos.subtemaCurricularId,
+    );
+
     return prisma.evaluacion.create({
       data: {
         titulo: String(datos.titulo).trim(),
@@ -74,6 +81,8 @@ const evaluacionesService = {
         estado: datos.estado ?? "BORRADOR",
         cursoId,
         docenteId,
+        temaCurricularId: refs.temaCurricularId,
+        subtemaCurricularId: refs.subtemaCurricularId,
       },
     });
   },
@@ -252,7 +261,7 @@ const evaluacionesService = {
 
   // Edita una evaluación propia (campos parciales).
   async actualizar(evaluacionId, docenteId, datos) {
-    await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
 
     const data = {};
     if (datos.titulo !== undefined) data.titulo = String(datos.titulo).trim();
@@ -265,6 +274,28 @@ const evaluacionesService = {
     if (datos.estado !== undefined) data.estado = datos.estado;
     if (datos.fechaLimite !== undefined) {
       data.fechaLimite = datos.fechaLimite ? new Date(datos.fechaLimite) : null;
+    }
+
+    if (
+      datos.temaCurricularId !== undefined ||
+      datos.subtemaCurricularId !== undefined
+    ) {
+      const temaId =
+        datos.temaCurricularId !== undefined
+          ? datos.temaCurricularId
+          : evaluacion.temaCurricularId;
+      const subtemaId =
+        datos.subtemaCurricularId !== undefined
+          ? datos.subtemaCurricularId
+          : evaluacion.subtemaCurricularId;
+
+      const refs = await planCurricularService.validarReferenciasEvaluacion(
+        evaluacion.cursoId,
+        temaId,
+        subtemaId,
+      );
+      data.temaCurricularId = refs.temaCurricularId;
+      data.subtemaCurricularId = refs.subtemaCurricularId;
     }
 
     return prisma.evaluacion.update({ where: { id: evaluacionId }, data });

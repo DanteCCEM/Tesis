@@ -11,12 +11,15 @@ import NotFound from './pages/NotFound.jsx'
 import DocenteDashboard from './pages/docente/Dashboard.jsx'
 import DocenteCursos from './pages/docente/Cursos.jsx'
 import DetalleCursoDocente from './pages/docente/DetalleCursoDocente.jsx'
+import PlanCurricular from './pages/docente/PlanCurricular.jsx'
+import PlanCurricularCurso from './pages/docente/PlanCurricularCurso.jsx'
 import DocenteCrearEvaluacion from './pages/docente/CrearEvaluacion.jsx'
 import DocenteResultados from './pages/docente/Resultados.jsx'
 import PerfilDocente from './pages/docente/PerfilDocente.jsx'
 
 import EstudianteDashboard from './pages/estudiante/Dashboard.jsx'
 import EstudianteCursos from './pages/estudiante/Cursos.jsx'
+import TemasDelCurso from './pages/estudiante/TemasDelCurso.jsx'
 import EstudianteEvaluacion from './pages/estudiante/Evaluacion.jsx'
 import EstudianteResultados from './pages/estudiante/Resultados.jsx'
 import EstudianteProgreso from './pages/estudiante/Progreso.jsx'
@@ -35,9 +38,14 @@ function AppRoutes() {
         <Route element={<AppLayout role="docente" />}>
           <Route path="/docente/dashboard" element={<DocenteDashboard />} />
           <Route path="/docente/cursos" element={<DocenteCursos />} />
+          <Route path="/docente/plan-curricular" element={<PlanCurricular />} />
           <Route
             path="/docente/cursos/:id"
             element={<DetalleCursoDocente key={location.pathname} />}
+          />
+          <Route
+            path="/docente/cursos/:cursoId/plan-curricular"
+            element={<PlanCurricularCurso key={location.pathname} />}
           />
           <Route
             path="/docente/crear-evaluacion"
@@ -52,6 +60,10 @@ function AppRoutes() {
         <Route element={<AppLayout role="estudiante" />}>
           <Route path="/estudiante/dashboard" element={<EstudianteDashboard />} />
           <Route path="/estudiante/cursos" element={<EstudianteCursos />} />
+          <Route
+            path="/estudiante/cursos/:cursoId/temas"
+            element={<TemasDelCurso key={location.pathname} />}
+          />
           <Route path="/estudiante/evaluacion" element={<EstudianteEvaluacion />} />
           <Route path="/estudiante/resultados" element={<EstudianteResultados />} />
           <Route path="/estudiante/progreso" element={<EstudianteProgreso />} />

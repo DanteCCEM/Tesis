@@ -11,6 +11,12 @@ const progresoRoutes = require("./progreso.routes");
 const perfilRoutes = require("./perfil.routes");
 const iaRoutes = require("./ia.routes");
 const practicasAdaptativasRoutes = require("./practicasAdaptativas.routes");
+const planCurricularRoutes = require("./planCurricular.routes");
+const {
+  unidadesRouter,
+  temasRouter,
+  subtemasRouter,
+} = require("./estructuraCurricular.routes");
 
 const router = Router();
 
@@ -35,5 +41,9 @@ router.use("/progreso", progresoRoutes);
 router.use("/perfil", perfilRoutes);
 router.use("/ia", iaRoutes);
 router.use("/practicas-adaptativas", practicasAdaptativasRoutes);
+router.use("/plan-curricular", planCurricularRoutes);
+router.use("/unidades-curriculares", unidadesRouter);
+router.use("/temas-curriculares", temasRouter);
+router.use("/subtemas-curriculares", subtemasRouter);
 
 module.exports = router;

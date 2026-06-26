@@ -4,6 +4,7 @@ import { Button, Card, PageHeader } from '../../../components/index.js'
 import cursosService from '../../../services/cursosService.js'
 import evaluacionesService from '../../../services/evaluacionesService.js'
 import iaService from '../../../services/iaService.js'
+import planCurricularService from '../../../services/planCurricularService.js'
 import styles from './CrearEvaluacion.module.css'
 
 const DIFFICULTIES = [
@@ -23,6 +24,10 @@ const BACKEND_TYPES = QUESTION_TYPES.map((t) => t.backend)
 const EMPTY_FORM = {
   course: '',
   title: '',
+  topicMode: 'plan',
+  unidadId: '',
+  temaCurricularId: '',
+  subtemaCurricularId: '',
   topic: '',
   subtopic: '',
   difficulty: 'INTERMEDIO',
@@ -30,6 +35,12 @@ const EMPTY_FORM = {
   tiposPregunta: ['OPCION_MULTIPLE'],
   type: 'multiple',
   deadline: '',
+}
+
+function elegirPlanCurricular(planes = []) {
+  if (!planes.length) return null
+  const publicado = planes.find((plan) => plan.estado === 'PUBLICADO')
+  return publicado ?? planes[0]
 }
 
 let optionSeq = 0
@@ -213,6 +224,11 @@ function CrearEvaluacion() {
   const [submitting, setSubmitting] = useState(false)
   const [generatingIA, setGeneratingIA] = useState(false)
 
+  const [planActivo, setPlanActivo] = useState(null)
+  const [loadingPlan, setLoadingPlan] = useState(false)
+  const [planError, setPlanError] = useState('')
+  const [sinPlan, setSinPlan] = useState(false)
+
   useEffect(() => {
     let cancelado = false
     cursosService
@@ -239,10 +255,132 @@ function CrearEvaluacion() {
     }
   }, [cursoIdParam])
 
+  useEffect(() => {
+    if (!form.course) {
+      setPlanActivo(null)
+      setSinPlan(false)
+      setPlanError('')
+      return undefined
+    }
+
+    let cancelado = false
+    setLoadingPlan(true)
+    setPlanError('')
+
+    planCurricularService
+      .listarPorCurso(Number(form.course))
+      .then((planes) => {
+        if (cancelado) return
+        const plan = elegirPlanCurricular(planes)
+        setPlanActivo(plan)
+        setSinPlan(!plan)
+        setForm((prev) => ({
+          ...prev,
+          unidadId: '',
+          temaCurricularId: '',
+          subtemaCurricularId: '',
+          topic: prev.topicMode === 'plan' ? '' : prev.topic,
+          subtopic: prev.topicMode === 'plan' ? '' : prev.subtopic,
+        }))
+      })
+      .catch((err) => {
+        if (!cancelado) {
+          setPlanError(err.mensaje || 'No se pudo cargar el plan curricular.')
+          setPlanActivo(null)
+          setSinPlan(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setLoadingPlan(false)
+      })
+
+    return () => {
+      cancelado = true
+    }
+  }, [form.course])
+
+  const unidadesPlan = planActivo?.unidades ?? []
+
+  const temasDisponibles = unidadesPlan.find(
+    (u) => String(u.id) === String(form.unidadId),
+  )?.temas ?? []
+
+  const temaSeleccionado = temasDisponibles.find(
+    (t) => String(t.id) === String(form.temaCurricularId),
+  )
+
+  const subtemasDisponibles = temaSeleccionado?.subtemas ?? []
+
   const handleChange = (field) => (event) => {
     const value = event.target.value
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
+  }
+
+  const handleCourseChange = (event) => {
+    const value = event.target.value
+    setForm((prev) => ({
+      ...prev,
+      course: value,
+      unidadId: '',
+      temaCurricularId: '',
+      subtemaCurricularId: '',
+      topic: prev.topicMode === 'custom' ? prev.topic : '',
+      subtopic: prev.topicMode === 'custom' ? prev.subtopic : '',
+    }))
+    setErrors((prev) => ({ ...prev, course: undefined, topic: undefined, subtopic: undefined }))
+  }
+
+  const setTopicMode = (mode) => {
+    setForm((prev) => ({
+      ...prev,
+      topicMode: mode,
+      unidadId: '',
+      temaCurricularId: '',
+      subtemaCurricularId: '',
+      topic: '',
+      subtopic: '',
+    }))
+    setErrors((prev) => ({ ...prev, topic: undefined, subtopic: undefined }))
+  }
+
+  const handleUnidadChange = (event) => {
+    const unidadId = event.target.value
+    setForm((prev) => ({
+      ...prev,
+      unidadId,
+      temaCurricularId: '',
+      subtemaCurricularId: '',
+      topic: '',
+      subtopic: '',
+    }))
+    setErrors((prev) => ({ ...prev, topic: undefined, subtopic: undefined }))
+  }
+
+  const handleTemaChange = (event) => {
+    const temaCurricularId = event.target.value
+    const tema = temasDisponibles.find((t) => String(t.id) === temaCurricularId)
+    setForm((prev) => ({
+      ...prev,
+      temaCurricularId,
+      subtemaCurricularId: '',
+      topic: tema?.titulo ?? '',
+      subtopic: '',
+    }))
+    setErrors((prev) => ({ ...prev, topic: undefined, subtopic: undefined }))
+  }
+
+  const handleSubtemaChange = (event) => {
+    const subtemaCurricularId = event.target.value
+    const subtema = subtemasDisponibles.find(
+      (s) => String(s.id) === subtemaCurricularId,
+    )
+    setForm((prev) => ({
+      ...prev,
+      subtemaCurricularId,
+      subtopic: subtema?.titulo ?? '',
+    }))
+    setErrors((prev) => ({ ...prev, subtopic: undefined }))
   }
 
   const toggleTipoPregunta = (backendType) => {
@@ -259,7 +397,21 @@ function CrearEvaluacion() {
     const next = {}
     if (!form.course) next.course = 'Selecciona un curso.'
     if (!form.title.trim()) next.title = 'El título es obligatorio.'
-    if (!form.topic.trim()) next.topic = 'El tema principal es obligatorio.'
+
+    if (form.topicMode === 'plan') {
+      if (sinPlan) {
+        next.topic =
+          'Este curso no tiene plan curricular. Usa tema personalizado o créalo desde el curso.'
+      } else if (!form.temaCurricularId) {
+        next.topic = 'Selecciona un tema del plan curricular.'
+      }
+      if (subtemasDisponibles.length > 0 && !form.subtemaCurricularId) {
+        next.subtopic = 'Selecciona un subtema del plan curricular.'
+      }
+    } else if (!form.topic.trim()) {
+      next.topic = 'El tema principal es obligatorio.'
+    }
+
     const amount = Number(form.amount)
     if (!amount || amount < 1) next.amount = 'Indica una cantidad válida (mínimo 1).'
     if (amount > 20) next.amount = 'El máximo permitido es 20 preguntas.'
@@ -268,7 +420,12 @@ function CrearEvaluacion() {
 
   const validateFormForIA = () => {
     const next = validateForm()
-    if (!form.subtopic.trim()) next.subtopic = 'El subtema es obligatorio para generar con IA.'
+    if (form.topicMode === 'custom' && !form.subtopic.trim()) {
+      next.subtopic = 'El subtema es obligatorio para generar con IA.'
+    }
+    if (form.topicMode === 'plan' && subtemasDisponibles.length > 0 && !form.subtemaCurricularId) {
+      next.subtopic = 'Selecciona un subtema del plan para generar con IA.'
+    }
     if (form.tiposPregunta.length === 0) {
       next.tiposPregunta = 'Selecciona al menos un tipo de pregunta.'
     }
@@ -305,7 +462,7 @@ function CrearEvaluacion() {
         curso: curso.nombre,
         grado: curso.grado,
         tema: form.topic.trim(),
-        subtema: form.subtopic.trim(),
+        subtema: form.subtopic.trim() || form.topic.trim(),
         dificultad: form.difficulty,
         cantidadPreguntas: Number(form.amount),
         tiposPregunta: form.tiposPregunta,
@@ -412,6 +569,14 @@ function CrearEvaluacion() {
         dificultad,
         fechaLimite: form.deadline || undefined,
         estado: 'BORRADOR',
+        ...(form.topicMode === 'plan' && form.temaCurricularId
+          ? {
+              temaCurricularId: Number(form.temaCurricularId),
+              ...(form.subtemaCurricularId
+                ? { subtemaCurricularId: Number(form.subtemaCurricularId) }
+                : {}),
+            }
+          : {}),
       })
 
       for (const q of questions) {
@@ -500,7 +665,7 @@ function CrearEvaluacion() {
                   id="course"
                   className={`${styles.select} ${errors.course ? styles.inputError : ''}`}
                   value={form.course}
-                  onChange={handleChange('course')}
+                  onChange={handleCourseChange}
                   disabled={generatingIA}
                 >
                   <option value="">Selecciona un curso…</option>
@@ -529,37 +694,196 @@ function CrearEvaluacion() {
                 {errors.title && <span className={styles.errorText}>{errors.title}</span>}
               </div>
 
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="topic">
-                  Tema principal
-                </label>
-                <input
-                  id="topic"
-                  type="text"
-                  className={`${styles.input} ${errors.topic ? styles.inputError : ''}`}
-                  placeholder="Ej. Ecuaciones cuadráticas"
-                  value={form.topic}
-                  onChange={handleChange('topic')}
-                  disabled={generatingIA}
-                />
-                {errors.topic && <span className={styles.errorText}>{errors.topic}</span>}
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <span className={styles.label}>Tema de la evaluación</span>
+                <div className={styles.modeToggle}>
+                  <label className={styles.modeOption}>
+                    <input
+                      type="radio"
+                      name="topicMode"
+                      checked={form.topicMode === 'plan'}
+                      onChange={() => setTopicMode('plan')}
+                      disabled={generatingIA || !form.course}
+                    />
+                    <span>Desde plan curricular</span>
+                  </label>
+                  <label className={styles.modeOption}>
+                    <input
+                      type="radio"
+                      name="topicMode"
+                      checked={form.topicMode === 'custom'}
+                      onChange={() => setTopicMode('custom')}
+                      disabled={generatingIA}
+                    />
+                    <span>Tema personalizado</span>
+                  </label>
+                </div>
               </div>
 
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="subtopic">
-                  Subtema
-                </label>
-                <input
-                  id="subtopic"
-                  type="text"
-                  className={`${styles.input} ${errors.subtopic ? styles.inputError : ''}`}
-                  placeholder="Ej. Fórmula general"
-                  value={form.subtopic}
-                  onChange={handleChange('subtopic')}
-                  disabled={generatingIA}
-                />
-                {errors.subtopic && <span className={styles.errorText}>{errors.subtopic}</span>}
-              </div>
+              {form.course && loadingPlan && (
+                <div className={`${styles.field} ${styles.fieldFull}`}>
+                  <div className={styles.planLoading}>
+                    <span className={styles.spinner} aria-hidden="true" />
+                    Cargando plan curricular del curso…
+                  </div>
+                </div>
+              )}
+
+              {form.course && planError && (
+                <div className={`${styles.field} ${styles.fieldFull}`}>
+                  <div className={styles.planNoticeError} role="alert">
+                    {planError}
+                  </div>
+                </div>
+              )}
+
+              {form.course && !loadingPlan && sinPlan && form.topicMode === 'plan' && (
+                <div className={`${styles.field} ${styles.fieldFull}`}>
+                  <div className={styles.planNotice}>
+                    <p>
+                      Este curso aún no tiene un plan curricular. Crea uno para
+                      seleccionar unidades, temas y subtemas al armar evaluaciones.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        navigate(`/docente/cursos/${form.course}/plan-curricular`)
+                      }
+                    >
+                      Ir a plan curricular
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {form.course &&
+                !loadingPlan &&
+                planActivo &&
+                form.topicMode === 'plan' && (
+                  <>
+                    <div className={`${styles.field} ${styles.fieldFull}`}>
+                      <p className={styles.planMeta}>
+                        Plan: {planActivo.periodo} · {planActivo.nombreArchivo} ·{' '}
+                        {planActivo.estado === 'PUBLICADO' ? 'Publicado' : 'Borrador'}
+                      </p>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label} htmlFor="unidad">
+                        Unidad
+                      </label>
+                      <select
+                        id="unidad"
+                        className={`${styles.select} ${errors.topic ? styles.inputError : ''}`}
+                        value={form.unidadId}
+                        onChange={handleUnidadChange}
+                        disabled={generatingIA || unidadesPlan.length === 0}
+                      >
+                        <option value="">Selecciona una unidad…</option>
+                        {unidadesPlan.map((unidad) => (
+                          <option key={unidad.id} value={unidad.id}>
+                            {unidad.titulo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label} htmlFor="temaPlan">
+                        Tema
+                      </label>
+                      <select
+                        id="temaPlan"
+                        className={`${styles.select} ${errors.topic ? styles.inputError : ''}`}
+                        value={form.temaCurricularId}
+                        onChange={handleTemaChange}
+                        disabled={generatingIA || !form.unidadId}
+                      >
+                        <option value="">Selecciona un tema…</option>
+                        {temasDisponibles.map((tema) => (
+                          <option key={tema.id} value={tema.id}>
+                            {tema.titulo}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.topic && (
+                        <span className={styles.errorText}>{errors.topic}</span>
+                      )}
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label} htmlFor="subtemaPlan">
+                        Subtema
+                      </label>
+                      <select
+                        id="subtemaPlan"
+                        className={`${styles.select} ${errors.subtopic ? styles.inputError : ''}`}
+                        value={form.subtemaCurricularId}
+                        onChange={handleSubtemaChange}
+                        disabled={
+                          generatingIA ||
+                          !form.temaCurricularId ||
+                          subtemasDisponibles.length === 0
+                        }
+                      >
+                        <option value="">
+                          {subtemasDisponibles.length === 0
+                            ? 'Sin subtemas en este tema'
+                            : 'Selecciona un subtema…'}
+                        </option>
+                        {subtemasDisponibles.map((subtema) => (
+                          <option key={subtema.id} value={subtema.id}>
+                            {subtema.titulo}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.subtopic && (
+                        <span className={styles.errorText}>{errors.subtopic}</span>
+                      )}
+                    </div>
+                  </>
+                )}
+
+              {form.topicMode === 'custom' && (
+                <>
+                  <div className={styles.field}>
+                    <label className={styles.label} htmlFor="topic">
+                      Tema principal
+                    </label>
+                    <input
+                      id="topic"
+                      type="text"
+                      className={`${styles.input} ${errors.topic ? styles.inputError : ''}`}
+                      placeholder="Ej. Ecuaciones cuadráticas"
+                      value={form.topic}
+                      onChange={handleChange('topic')}
+                      disabled={generatingIA}
+                    />
+                    {errors.topic && (
+                      <span className={styles.errorText}>{errors.topic}</span>
+                    )}
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label} htmlFor="subtopic">
+                      Subtema
+                    </label>
+                    <input
+                      id="subtopic"
+                      type="text"
+                      className={`${styles.input} ${errors.subtopic ? styles.inputError : ''}`}
+                      placeholder="Ej. Fórmula general"
+                      value={form.subtopic}
+                      onChange={handleChange('subtopic')}
+                      disabled={generatingIA}
+                    />
+                    {errors.subtopic && (
+                      <span className={styles.errorText}>{errors.subtopic}</span>
+                    )}
+                  </div>
+                </>
+              )}
 
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="difficulty">

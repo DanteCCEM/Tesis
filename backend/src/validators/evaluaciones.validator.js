@@ -12,8 +12,17 @@ const esFechaValida = (valor) => !Number.isNaN(new Date(valor).getTime());
 
 // POST /api/evaluaciones
 const validarCrearEvaluacion = (req, res, next) => {
-  const { titulo, tema, cursoId, dificultad, nivelDificultad, estado, fechaLimite } =
-    req.body ?? {};
+  const {
+    titulo,
+    tema,
+    cursoId,
+    dificultad,
+    nivelDificultad,
+    estado,
+    fechaLimite,
+    temaCurricularId,
+    subtemaCurricularId,
+  } = req.body ?? {};
   const nivel = dificultad ?? nivelDificultad;
   const errores = [];
 
@@ -39,6 +48,12 @@ const validarCrearEvaluacion = (req, res, next) => {
   ) {
     errores.push("fechaLimite no es una fecha válida");
   }
+  if (temaCurricularId !== undefined && temaCurricularId !== null && !esEnteroPositivo(temaCurricularId)) {
+    errores.push("temaCurricularId debe ser un entero válido");
+  }
+  if (subtemaCurricularId !== undefined && subtemaCurricularId !== null && !esEnteroPositivo(subtemaCurricularId)) {
+    errores.push("subtemaCurricularId debe ser un entero válido");
+  }
 
   if (errores.length > 0) {
     return next(ApiError.badRequest(errores.join("; ")));
@@ -48,8 +63,16 @@ const validarCrearEvaluacion = (req, res, next) => {
 
 // PUT /api/evaluaciones/:id
 const validarActualizarEvaluacion = (req, res, next) => {
-  const { titulo, tema, dificultad, nivelDificultad, estado, fechaLimite } =
-    req.body ?? {};
+  const {
+    titulo,
+    tema,
+    dificultad,
+    nivelDificultad,
+    estado,
+    fechaLimite,
+    temaCurricularId,
+    subtemaCurricularId,
+  } = req.body ?? {};
   const nivel = dificultad ?? nivelDificultad;
   const errores = [];
 
@@ -71,6 +94,12 @@ const validarActualizarEvaluacion = (req, res, next) => {
     !esFechaValida(fechaLimite)
   ) {
     errores.push("fechaLimite no es una fecha válida");
+  }
+  if (temaCurricularId !== undefined && temaCurricularId !== null && !esEnteroPositivo(temaCurricularId)) {
+    errores.push("temaCurricularId debe ser un entero válido");
+  }
+  if (subtemaCurricularId !== undefined && subtemaCurricularId !== null && !esEnteroPositivo(subtemaCurricularId)) {
+    errores.push("subtemaCurricularId debe ser un entero válido");
   }
 
   if (errores.length > 0) {

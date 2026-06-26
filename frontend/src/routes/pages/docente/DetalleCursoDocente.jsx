@@ -252,6 +252,14 @@ function DetalleCursoDocente() {
               ← Mis cursos
             </Button>
             <Button
+              variant="outline"
+              onClick={() =>
+                navigate(`/docente/cursos/${curso.id}/plan-curricular`)
+              }
+            >
+              Plan curricular
+            </Button>
+            <Button
               variant="primary"
               onClick={() =>
                 navigate(`/docente/crear-evaluacion?cursoId=${curso.id}`)

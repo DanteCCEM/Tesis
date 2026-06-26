@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import authService from '../../services/authService.js'
 import styles from './Sidebar.module.css'
 
@@ -18,6 +18,13 @@ const ICONS = {
       <circle cx="12" cy="7" r="4" />
     </>
   ),
+  plan: (
+    <>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      <path d="M8 7h8M8 11h8M8 15h5" />
+    </>
+  ),
   logout: (
     <>
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -30,6 +37,11 @@ const NAV_ITEMS = {
   docente: [
     { to: '/docente/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { to: '/docente/cursos', label: 'Mis cursos', icon: 'cursos' },
+    {
+      to: '/docente/plan-curricular',
+      label: 'Plan curricular',
+      icon: 'plan',
+    },
     {
       to: '/docente/crear-evaluacion',
       label: 'Crear evaluación',
@@ -66,6 +78,7 @@ function Icon({ name }) {
 
 function Sidebar({ role = 'docente', isOpen = false, onNavigate }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const items = NAV_ITEMS[role] ?? []
   const sectionLabel = role === 'docente' ? 'Panel docente' : 'Panel estudiante'
 
@@ -86,14 +99,18 @@ function Sidebar({ role = 'docente', isOpen = false, onNavigate }) {
         <nav className={styles.nav}>
           {items.map((item) => (
             <NavLink
-              key={item.to}
+              key={`${item.to}-${item.label}`}
               to={item.to}
               onClick={onNavigate}
-              className={({ isActive }) =>
-                [styles.link, isActive ? styles.active : '']
+              className={({ isActive }) => {
+                const active =
+                  isActive ||
+                  (item.activePattern &&
+                    location.pathname.includes(item.activePattern))
+                return [styles.link, active ? styles.active : '']
                   .filter(Boolean)
                   .join(' ')
-              }
+              }}
             >
               <Icon name={item.icon} />
               <span>{item.label}</span>

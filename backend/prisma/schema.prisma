@@ -48,6 +48,23 @@ enum EstadoPracticaAdaptativa {
   COMPLETADA
 }
 
+enum PeriodoCurricular {
+  SEMESTRE
+  BIMESTRE
+  TRIMESTRE
+}
+
+enum EstadoPlanCurricular {
+  BORRADOR
+  PUBLICADO
+}
+
+enum EstadoTemaCurricular {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADO
+}
+
 // ===================== MODELOS =====================
 
 model Usuario {
@@ -89,6 +106,7 @@ model Curso {
   evaluaciones         Evaluacion[]
   progresos            ProgresoEstudiante[]
   practicasAdaptativas PracticaAdaptativa[]
+  planesCurriculares   PlanCurricular[]
 }
 
 model Matricula {
@@ -113,8 +131,10 @@ model Evaluacion {
   fechaLimite     DateTime?
   estado              EstadoEvaluacion @default(BORRADOR)
   esPracticaAdaptativa Boolean         @default(false)
-  estudianteObjetivoId Int?
-  createdAt           DateTime         @default(now())
+  estudianteObjetivoId  Int?
+  temaCurricularId      Int?
+  subtemaCurricularId   Int?
+  createdAt             DateTime         @default(now())
 
   cursoId Int
   curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
@@ -122,7 +142,9 @@ model Evaluacion {
   docenteId Int
   docente   Usuario @relation(fields: [docenteId], references: [id])
 
-  estudianteObjetivo Usuario? @relation("PracticasObjetivo", fields: [estudianteObjetivoId], references: [id])
+  estudianteObjetivo  Usuario?            @relation("PracticasObjetivo", fields: [estudianteObjetivoId], references: [id])
+  temaCurricular      TemaCurricular?     @relation(fields: [temaCurricularId], references: [id], onDelete: SetNull)
+  subtemaCurricular   SubtemaCurricular?  @relation(fields: [subtemaCurricularId], references: [id], onDelete: SetNull)
 
   preguntas          Pregunta[]
   intentos           IntentoEvaluacion[]
@@ -229,4 +251,63 @@ model PracticaAdaptativa {
 
   evaluacionId Int        @unique
   evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+}
+
+model PlanCurricular {
+  id            Int                  @id @default(autoincrement())
+  nombreArchivo String
+  rutaArchivo   String
+  periodo       PeriodoCurricular
+  estado        EstadoPlanCurricular @default(BORRADOR)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  cursoId Int
+  curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  unidades UnidadCurricular[]
+}
+
+model UnidadCurricular {
+  id          Int      @id @default(autoincrement())
+  titulo      String
+  descripcion String?
+  orden       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  planCurricularId Int
+  planCurricular   PlanCurricular @relation(fields: [planCurricularId], references: [id], onDelete: Cascade)
+
+  temas TemaCurricular[]
+}
+
+model TemaCurricular {
+  id          Int                  @id @default(autoincrement())
+  titulo      String
+  descripcion String?
+  orden       Int
+  estado      EstadoTemaCurricular @default(PENDIENTE)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  unidadCurricularId Int
+  unidadCurricular   UnidadCurricular @relation(fields: [unidadCurricularId], references: [id], onDelete: Cascade)
+
+  subtemas     SubtemaCurricular[]
+  evaluaciones Evaluacion[]
+}
+
+model SubtemaCurricular {
+  id          Int      @id @default(autoincrement())
+  titulo      String
+  descripcion String?
+  orden       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  temaCurricularId Int
+  temaCurricular   TemaCurricular @relation(fields: [temaCurricularId], references: [id], onDelete: Cascade)
+
+  evaluaciones Evaluacion[]
 }

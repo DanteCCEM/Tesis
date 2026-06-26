@@ -143,9 +143,19 @@ function EstudianteCursos() {
           title={selected.nombre}
           subtitle={selected.docente?.nombres ?? 'Docente'}
           actions={
-            <Button variant="ghost" onClick={backToList}>
-              ← Volver a mis cursos
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  navigate(`/estudiante/cursos/${selected.id}/temas`)
+                }
+              >
+                Ver temas del curso
+              </Button>
+              <Button variant="ghost" onClick={backToList}>
+                ← Volver a mis cursos
+              </Button>
+            </>
           }
         />
 
@@ -275,6 +285,15 @@ function EstudianteCursos() {
               <div className={styles.actions}>
                 <Button variant="primary" fullWidth onClick={() => openCourse(course)}>
                   Ver curso
+                </Button>
+                <Button
+                  variant="outline"
+                  fullWidth
+                  onClick={() =>
+                    navigate(`/estudiante/cursos/${course.id}/temas`)
+                  }
+                >
+                  Ver temas del curso
                 </Button>
               </div>
             </article>

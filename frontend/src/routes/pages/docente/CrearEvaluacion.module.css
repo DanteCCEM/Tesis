@@ -418,8 +418,44 @@
   color: var(--ev-text-muted);
 }
 
-.emptyState p {
-  margin: 0 0 4px;
+.planMeta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ev-text-muted);
+}
+
+.planLoading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ev-text-muted);
+}
+
+.planNotice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--ev-radius-sm);
+  border: 1px solid #bfdbfe;
+  background-color: #eff6ff;
+  color: #1e40af;
+  font-size: 14px;
+}
+
+.planNotice p {
+  margin: 0;
+}
+
+.planNoticeError {
+  padding: 12px 14px;
+  border-radius: var(--ev-radius-sm);
+  border: 1px solid #fecaca;
+  background-color: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
 }
 
 .banner {
