@@ -1,51 +1,51 @@
-const OpenAI = require("openai");
+const { GoogleGenAI } = require("@google/genai");
 const ApiError = require("../utils/ApiError");
 
 const NIVELES = ["BASICO", "INTERMEDIO", "AVANZADO"];
 const TIPOS_PREGUNTA = ["OPCION_MULTIPLE", "VERDADERO_FALSO", "RESPUESTA_CORTA"];
 
-let openaiClient = null;
+let geminiClient = null;
 
 const obtenerCliente = () => {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || !String(apiKey).trim()) {
     throw ApiError.serviceUnavailable(
       "El servicio de inteligencia artificial no está configurado",
     );
   }
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey });
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({ apiKey: String(apiKey).trim() });
   }
-  return openaiClient;
+  return geminiClient;
 };
 
-const obtenerModelo = () => process.env.OPENAI_MODEL || "gpt-4o-mini";
+const obtenerModelo = () => process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 const esTexto = (valor) => typeof valor === "string" && valor.trim().length > 0;
 
 const esNumeroPositivo = (valor) =>
   typeof valor === "number" && Number.isFinite(valor) && valor > 0;
 
-const mapearErrorOpenAI = (error) => {
-  const status = error?.status ?? error?.response?.status;
-  const code = error?.code ?? error?.error?.code;
+const mapearErrorGemini = (error) => {
+  const status = error?.status ?? error?.response?.status ?? error?.statusCode;
+  const message = String(error?.message ?? "").toLowerCase();
 
-  if (status === 429 || code === "rate_limit_exceeded") {
+  if (status === 429 || message.includes("resource_exhausted") || message.includes("rate limit")) {
     return ApiError.tooManyRequests(
       "Se alcanzó el límite de uso del servicio de IA. Intenta de nuevo en unos minutos",
     );
   }
-  if (status === 401 || status === 403) {
+  if (status === 401 || status === 403 || message.includes("api key")) {
     return ApiError.serviceUnavailable(
       "El servicio de inteligencia artificial no está disponible temporalmente",
     );
   }
-  if (status === 503 || code === "server_overloaded") {
+  if (status === 503 || message.includes("unavailable") || message.includes("overloaded")) {
     return ApiError.serviceUnavailable(
       "El servicio de inteligencia artificial está saturado. Intenta más tarde",
     );
   }
-  if (code === "context_length_exceeded") {
+  if (message.includes("token") && message.includes("limit")) {
     return ApiError.badRequest(
       "La solicitud es demasiado extensa para procesarla. Reduce la cantidad de datos enviados",
     );
@@ -60,17 +60,17 @@ const invocarJson = async ({ system, user, temperature = 0.4 }) => {
   const client = obtenerCliente();
 
   try {
-    const completion = await client.chat.completions.create({
+    const response = await client.models.generateContent({
       model: obtenerModelo(),
-      temperature,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
+      contents: user,
+      config: {
+        systemInstruction: system,
+        temperature,
+        responseMimeType: "application/json",
+      },
     });
 
-    const content = completion.choices?.[0]?.message?.content;
+    const content = response.text;
     if (!content) {
       throw ApiError.serviceUnavailable(
         "La IA no devolvió una respuesta válida. Intenta de nuevo",
@@ -88,7 +88,7 @@ const invocarJson = async ({ system, user, temperature = 0.4 }) => {
     if (error instanceof ApiError) {
       throw error;
     }
-    throw mapearErrorOpenAI(error);
+    throw mapearErrorGemini(error);
   }
 };
 

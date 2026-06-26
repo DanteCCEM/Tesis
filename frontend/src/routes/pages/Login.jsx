@@ -6,51 +6,11 @@ import styles from './Login.module.css'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-const ROLES = [
-  {
-    value: 'docente',
-    label: 'Docente',
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M22 10 12 5 2 10l10 5 10-5Z" />
-        <path d="M6 12v5c0 1 2.5 2.5 6 2.5s6-1.5 6-2.5v-5" />
-      </svg>
-    ),
-  },
-  {
-    value: 'estudiante',
-    label: 'Estudiante',
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" />
-      </svg>
-    ),
-  },
-]
-
 function Login() {
   const navigate = useNavigate()
   const [form, setForm] = useState({
     email: '',
     password: '',
-    role: 'docente',
   })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
@@ -58,10 +18,6 @@ function Login() {
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }))
     setErrors((prev) => ({ ...prev, [field]: undefined, form: undefined }))
-  }
-
-  const selectRole = (role) => {
-    setForm((prev) => ({ ...prev, role }))
   }
 
   const validate = () => {
@@ -98,7 +54,6 @@ function Login() {
         contrasena: form.password,
       })
 
-      // Redirige según el rol real devuelto por el backend.
       if (usuario?.rol === 'DOCENTE') {
         navigate('/docente/dashboard')
       } else if (usuario?.rol === 'ESTUDIANTE') {
@@ -127,7 +82,8 @@ function Login() {
 
         <h1 className={styles.title}>Iniciar sesión</h1>
         <p className={styles.subtitle}>
-          Accede a tu cuenta para continuar con tus evaluaciones.
+          Accede con tu correo y contraseña. Serás redirigido según tu rol en
+          el sistema.
         </p>
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
@@ -140,6 +96,7 @@ function Login() {
             <input
               id="email"
               type="email"
+              autoComplete="email"
               className={`${styles.input} ${
                 errors.email ? styles.inputError : ''
               }`}
@@ -160,6 +117,7 @@ function Login() {
             <input
               id="password"
               type="password"
+              autoComplete="current-password"
               className={`${styles.input} ${
                 errors.password ? styles.inputError : ''
               }`}
@@ -171,34 +129,6 @@ function Login() {
             {errors.password && (
               <span className={styles.errorText}>{errors.password}</span>
             )}
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.label}>Ingresar como</span>
-            <div className={styles.roleGroup} role="radiogroup" aria-label="Rol">
-              {ROLES.map((role) => {
-                const selected = form.role === role.value
-                return (
-                  <label
-                    key={role.value}
-                    className={`${styles.roleOption} ${
-                      selected ? styles.roleSelected : ''
-                    }`}
-                  >
-                    <input
-                      className={styles.roleInput}
-                      type="radio"
-                      name="role"
-                      value={role.value}
-                      checked={selected}
-                      onChange={() => selectRole(role.value)}
-                    />
-                    <span className={styles.roleIcon}>{role.icon}</span>
-                    <span className={styles.roleLabel}>{role.label}</span>
-                  </label>
-                )
-              })}
-            </div>
           </div>
 
           <Button

@@ -84,12 +84,24 @@
 .input {
   font-family: inherit;
   font-size: 14px;
+  line-height: 1.4;
   padding: 11px 13px;
   border-radius: var(--ev-radius-sm);
   border: 1px solid var(--ev-gray-300);
   background-color: var(--ev-surface);
   color: var(--ev-text);
+  width: 100%;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--ev-surface) inset;
+  -webkit-text-fill-color: var(--ev-text);
+  transition: background-color 9999s ease-out 0s;
 }
 
 .input::placeholder {
@@ -114,70 +126,6 @@
 .errorText {
   font-size: 12.5px;
   color: #dc2626;
-}
-
-/* Selector de rol */
-.roleGroup {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.roleOption {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 10px;
-  border-radius: var(--ev-radius-sm);
-  border: 1.5px solid var(--ev-gray-300);
-  background-color: var(--ev-surface);
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.roleOption:hover {
-  border-color: var(--ev-primary);
-}
-
-.roleSelected {
-  border-color: var(--ev-primary);
-  background-color: var(--ev-primary-soft);
-}
-
-.roleIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background-color: var(--ev-accent-soft);
-  color: var(--ev-accent);
-}
-
-.roleSelected .roleIcon {
-  background-color: var(--ev-primary);
-  color: var(--ev-white);
-}
-
-.roleIcon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.roleLabel {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ev-text);
-}
-
-.roleInput {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
 }
 
 /* Alerta de formulario */

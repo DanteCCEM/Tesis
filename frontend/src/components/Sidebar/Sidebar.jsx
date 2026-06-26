@@ -81,29 +81,33 @@ function Sidebar({ role = 'docente', isOpen = false, onNavigate }) {
 
   return (
     <aside className={classes} aria-label="Navegación principal">
-      <span className={styles.section}>{sectionLabel}</span>
-      <nav className={styles.nav}>
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              [styles.link, isActive ? styles.active : '']
-                .filter(Boolean)
-                .join(' ')
-            }
-          >
-            <Icon name={item.icon} />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
-      </nav>
+      <div className={styles.inner}>
+        <span className={styles.section}>{sectionLabel}</span>
+        <nav className={styles.nav}>
+          {items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                [styles.link, isActive ? styles.active : '']
+                  .filter(Boolean)
+                  .join(' ')
+              }
+            >
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
 
-      <button type="button" className={styles.logout} onClick={handleLogout}>
-        <Icon name="logout" />
-        <span>Cerrar sesión</span>
-      </button>
+        <div className={styles.footer}>
+          <button type="button" className={styles.logout} onClick={handleLogout}>
+            <Icon name="logout" />
+            <span>Cerrar sesión</span>
+          </button>
+        </div>
+      </div>
     </aside>
   )
 }

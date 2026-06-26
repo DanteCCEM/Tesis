@@ -9,8 +9,9 @@ const errorHandler = require("./middlewares/errorHandler");
 
 const app = express();
 
-// CORS limitado al frontend de desarrollo (Vite).
-app.use(cors({ origin: "http://localhost:5173" }));
+// CORS: en Docker usa CORS_ORIGIN; en desarrollo local, Vite (:5173).
+const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+app.use(cors({ origin: corsOrigin.split(",").map((origin) => origin.trim()) }));
 
 // Parseo de JSON en el cuerpo de las peticiones.
 app.use(express.json());

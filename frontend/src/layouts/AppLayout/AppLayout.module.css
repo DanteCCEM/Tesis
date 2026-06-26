@@ -9,13 +9,16 @@
 .body {
   display: flex;
   flex: 1 1 auto;
+  align-items: flex-start;
   position: relative;
+  min-height: calc(100svh - var(--ev-navbar-height));
 }
 
 .content {
   flex: 1 1 auto;
   min-width: 0;
   padding: 32px;
+  box-sizing: border-box;
 }
 
 .container {
