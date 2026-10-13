@@ -4,8 +4,8 @@ const ApiError = require("../utils/ApiError");
 const NIVELES = ["BASICO", "INTERMEDIO", "AVANZADO"];
 const TIPOS_PREGUNTA = ["OPCION_MULTIPLE", "VERDADERO_FALSO", "RESPUESTA_CORTA"];
 
-const MODELO_DEFECTO = "gemini-2.0-flash-lite";
-const MODELOS_FALLBACK_DEFECTO = "gemini-2.5-flash,gemini-2.0-flash";
+const MODELO_DEFECTO = "gemini-3.5-flash-lite";
+const MODELOS_FALLBACK_DEFECTO = "gemini-3.5-flash-lite";
 
 let geminiClient = null;
 let geminiClientKey = null;
@@ -131,6 +131,18 @@ const esCuotaAgotadaModelo = (error) => {
   return /"limit"\s*:\s*0\b/.test(mensaje) || /\blimit:\s*0\b/.test(mensaje);
 };
 
+const esErrorModeloNoDisponible = (error) => {
+  const status = extraerStatusError(error);
+  const mensaje = String(error?.message ?? "").toLowerCase();
+  return (
+    status === 404 ||
+    mensaje.includes("not found") ||
+    mensaje.includes("not_found") ||
+    mensaje.includes("is not found") ||
+    mensaje.includes("no longer available")
+  );
+};
+
 const esErrorTemporal = (error) => {
   const status = extraerStatusError(error);
   const mensaje = String(error?.message ?? "").toLowerCase();
@@ -139,6 +151,80 @@ const esErrorTemporal = (error) => {
     status === 503 ||
     mensaje.includes("unavailable") ||
     mensaje.includes("overloaded")
+  );
+};
+
+const registrarFalloGemini = (error, model) => {
+  const mensaje = String(error?.message ?? "error desconocido").slice(0, 500);
+  console.error(
+    `[IA] Fallo Gemini modelo=${model} status=${extraerStatusError(error) ?? "n/d"}: ${mensaje}`,
+  );
+};
+
+const extraerTextoRespuesta = (response) => {
+  const crudo =
+    typeof response?.text === "function" ? response.text() : response?.text;
+  if (crudo && String(crudo).trim()) {
+    return String(crudo).trim();
+  }
+
+  const partes = response?.candidates?.[0]?.content?.parts ?? [];
+  const concatenado = partes
+    .map((parte) => parte?.text ?? "")
+    .join("")
+    .trim();
+  if (concatenado) return concatenado;
+
+  const bloqueo =
+    response?.promptFeedback?.blockReason ||
+    response?.candidates?.[0]?.finishReason;
+  if (bloqueo && String(bloqueo).toUpperCase().includes("SAFETY")) {
+    throw ApiError.badRequest(
+      "La solicitud fue bloqueada por las políticas de contenido de la IA",
+    );
+  }
+
+  return "";
+};
+
+const parsearJsonDeTexto = (content) => {
+  const texto = String(content ?? "").trim();
+  if (!texto) {
+    throw new Error("La IA devolvió una respuesta vacía");
+  }
+
+  const cerca = texto.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidato = cerca ? cerca[1].trim() : texto;
+  const inicio = candidato.indexOf("{");
+  const fin = candidato.lastIndexOf("}");
+  const jsonTexto =
+    inicio >= 0 && fin > inicio ? candidato.slice(inicio, fin + 1) : candidato;
+
+  return JSON.parse(jsonTexto);
+};
+
+const debeProbarOtroModelo = (error) => {
+  if (!(error instanceof ApiError)) {
+    return (
+      esErrorCuota(error) ||
+      esCuotaAgotadaModelo(error) ||
+      esErrorModeloNoDisponible(error) ||
+      esErrorTemporal(error)
+    );
+  }
+
+  const mensaje = String(error.message ?? "").toLowerCase();
+  if (mensaje.includes("no está configurado")) return false;
+
+  return (
+    error.statusCode === 429 ||
+    mensaje.includes("límite de uso") ||
+    mensaje.includes("json válido") ||
+    mensaje.includes("no devolvió") ||
+    mensaje.includes("respuesta ia inválida") ||
+    mensaje.includes("formato esperado") ||
+    mensaje.includes("no está disponible") ||
+    mensaje.includes("saturado")
   );
 };
 
@@ -185,7 +271,7 @@ const generarContenido = async ({ model, system, user, temperature }) => {
     },
   });
 
-  return response.text;
+  return extraerTextoRespuesta(response);
 };
 
 const invocarGeneracionConReintentos = async (opciones) => {
@@ -201,9 +287,10 @@ const invocarGeneracionConReintentos = async (opciones) => {
       }
 
       ultimoError = error;
+      registrarFalloGemini(error, opciones.model);
 
-      // Sin cuota en este modelo: probar fallback de inmediato, sin esperar ~47s.
-      if (esCuotaAgotadaModelo(error)) {
+      // Sin cuota en este modelo o modelo inexistente: pasar al siguiente.
+      if (esCuotaAgotadaModelo(error) || esErrorModeloNoDisponible(error)) {
         break;
       }
 
@@ -221,7 +308,7 @@ const invocarGeneracionConReintentos = async (opciones) => {
     }
   }
 
-  throw mapearErrorGemini(ultimoError);
+  throw ultimoError;
 };
 
 const invocarJson = async ({ system, user, temperature = 0.4 }) => {
@@ -230,6 +317,7 @@ const invocarJson = async ({ system, user, temperature = 0.4 }) => {
 
   for (let index = 0; index < modelos.length; index += 1) {
     const model = modelos[index];
+    const hayOtroModelo = index < modelos.length - 1;
 
     try {
       const content = await invocarGeneracionConReintentos({
@@ -246,38 +334,21 @@ const invocarJson = async ({ system, user, temperature = 0.4 }) => {
       }
 
       try {
-        return JSON.parse(content);
+        return parsearJsonDeTexto(content);
       } catch {
         throw ApiError.serviceUnavailable(
           "La respuesta de la IA no tiene un formato JSON válido",
         );
       }
     } catch (error) {
-      if (error instanceof ApiError) {
-        ultimoError = error;
+      ultimoError = error instanceof ApiError ? error : mapearErrorGemini(error);
 
-        const hayOtroModelo = index < modelos.length - 1;
-        const esCuota =
-          error.statusCode === 429 ||
-          String(error.message ?? "")
-            .toLowerCase()
-            .includes("límite de uso");
-
-        if (hayOtroModelo && esCuota) {
-          continue;
-        }
-
-        throw error;
-      }
-
-      ultimoError = error;
-
-      const hayOtroModelo = index < modelos.length - 1;
-      if (hayOtroModelo && (esErrorCuota(error) || esCuotaAgotadaModelo(error))) {
+      if (hayOtroModelo && debeProbarOtroModelo(error)) {
+        console.warn(`[IA] Reintentando con el siguiente modelo tras fallar ${model}`);
         continue;
       }
 
-      throw mapearErrorGemini(error);
+      throw ultimoError;
     }
   }
 
@@ -361,13 +432,35 @@ const validarPreguntaGenerada = (pregunta, index) => {
     );
   }
 
-  if (!esNumeroPositivo(pregunta.puntaje)) {
+  const puntaje = Number(pregunta.puntaje);
+  if (!esNumeroPositivo(puntaje)) {
     throw ApiError.serviceUnavailable(
       `Respuesta IA inválida: ${prefijo}.puntaje debe ser un número positivo`,
     );
   }
 
-  const alternativas = Array.isArray(pregunta.alternativas) ? pregunta.alternativas : [];
+  const respuestaCorrecta = String(pregunta.respuestaCorrecta).trim();
+  let alternativas = Array.isArray(pregunta.alternativas)
+    ? pregunta.alternativas.map((alt) => ({
+        texto: String(alt?.texto ?? "").trim(),
+        esCorrecta:
+          alt?.esCorrecta === true ||
+          alt?.esCorrecta === "true" ||
+          alt?.esCorrecta === 1,
+      }))
+    : [];
+
+  if (pregunta.tipo !== "RESPUESTA_CORTA" && alternativas.length > 0) {
+    const correctas = alternativas.filter((alt) => alt.esCorrecta);
+    if (correctas.length !== 1) {
+      const objetivo = respuestaCorrecta.toLowerCase();
+      alternativas = alternativas.map((alt) => ({
+        ...alt,
+        esCorrecta: alt.texto.toLowerCase() === objetivo,
+      }));
+    }
+  }
+
   if (!validarAlternativas(alternativas, pregunta.tipo)) {
     throw ApiError.serviceUnavailable(
       `Respuesta IA inválida: ${prefijo}.alternativas no cumple el formato para ${pregunta.tipo}`,
@@ -377,19 +470,13 @@ const validarPreguntaGenerada = (pregunta, index) => {
   return {
     enunciado: pregunta.enunciado.trim(),
     tipo: pregunta.tipo,
-    alternativas:
-      pregunta.tipo === "RESPUESTA_CORTA"
-        ? []
-        : alternativas.map((alt) => ({
-            texto: String(alt.texto).trim(),
-            esCorrecta: alt.esCorrecta === true,
-          })),
-    respuestaCorrecta: pregunta.respuestaCorrecta.trim(),
+    alternativas: pregunta.tipo === "RESPUESTA_CORTA" ? [] : alternativas,
+    respuestaCorrecta,
     explicacion: pregunta.explicacion.trim(),
     dificultad: pregunta.dificultad,
     tema: pregunta.tema.trim(),
     subtema: pregunta.subtema.trim(),
-    puntaje: Math.round(pregunta.puntaje),
+    puntaje: Math.round(puntaje),
   };
 };
 

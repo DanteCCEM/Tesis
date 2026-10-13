@@ -479,7 +479,14 @@ function CrearEvaluacion() {
         `Se generaron ${generadas.length} pregunta(s) con IA. Revísalas, edítalas y confirma al guardar o publicar.`,
       )
     } catch (err) {
-      setBannerError(err.mensaje || 'No se pudo generar el borrador con IA.')
+      const mensaje = err.mensaje || 'No se pudo generar el borrador con IA.'
+      if (/no está configurado/i.test(mensaje)) {
+        setBannerError(
+          'La IA no está configurada. Agrega GEMINI_API_KEY en el archivo .env de la raíz del proyecto y vuelve a levantar Docker.',
+        )
+      } else {
+        setBannerError(mensaje)
+      }
     } finally {
       setGeneratingIA(false)
     }

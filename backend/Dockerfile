@@ -12,10 +12,13 @@ COPY prisma.config.ts ./
 COPY src ./src
 COPY scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
 
-RUN chmod +x ./scripts/docker-entrypoint.sh \
+# En Windows el script suele copiarse con CRLF; Alpine entonces falla con
+# "exec ./scripts/docker-entrypoint.sh: no such file or directory".
+RUN sed -i 's/\r$//' ./scripts/docker-entrypoint.sh \
+  && chmod +x ./scripts/docker-entrypoint.sh \
   && npx prisma generate
 
 ENV NODE_ENV=production
 EXPOSE 3000
 
-ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
+ENTRYPOINT ["sh", "./scripts/docker-entrypoint.sh"]
