@@ -1,6 +1,7 @@
 const asyncHandler = require("../utils/asyncHandler");
 const ApiError = require("../utils/ApiError");
 const cursosService = require("../services/cursos.service");
+const estudiantesExcelService = require("../services/estudiantesExcel.service");
 
 // Convierte un parámetro de ruta en un entero positivo o lanza 400.
 const parseId = (valor, nombre) => {
@@ -47,6 +48,35 @@ const cursosController = {
       req.body,
     );
     res.status(201).json({ ok: true, matricula });
+  }),
+
+  descargarPlantillaEstudiantes: asyncHandler(async (req, res) => {
+    const cursoId = parseId(req.params.id, "id del curso");
+    await cursosService.obtenerDetalleDocente(cursoId, req.usuario.id);
+    const buffer = await estudiantesExcelService.crearPlantilla();
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="plantilla-estudiantes-curso-${cursoId}.xlsx"`,
+    );
+    res.send(Buffer.from(buffer));
+  }),
+
+  importarEstudiantes: asyncHandler(async (req, res) => {
+    const cursoId = parseId(req.params.id, "id del curso");
+    const resultado = await estudiantesExcelService.importar(
+      cursoId,
+      req.usuario.id,
+      req.file,
+    );
+    res.status(201).json({
+      ok: true,
+      ...resultado,
+      mensaje: `${resultado.cantidadImportada} estudiante(s) importado(s) y matriculado(s) correctamente`,
+    });
   }),
 
   // DELETE /api/cursos/:id/matriculas/:estudianteId (solo DOCENTE propietario)

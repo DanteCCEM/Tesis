@@ -65,6 +65,12 @@ function DetalleCursoDocente() {
   const [enrollError, setEnrollError] = useState('')
   const [enrolling, setEnrolling] = useState(false)
 
+  const [importOpen, setImportOpen] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [importError, setImportError] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
+
   const [removeTarget, setRemoveTarget] = useState(null)
   const [removeError, setRemoveError] = useState('')
   const [removing, setRemoving] = useState(false)
@@ -113,8 +119,6 @@ function DetalleCursoDocente() {
 
   useEffect(() => {
     let cancelado = false
-    setLoading(true)
-    setLoadingEstudiantes(true)
     Promise.all([
       cursosService.detalle(cursoId),
       cursosService.resumenEstudiantes(cursoId),
@@ -163,6 +167,46 @@ function DetalleCursoDocente() {
       setEnrollError(err.mensaje || 'No se pudo matricular al estudiante.')
     } finally {
       setEnrolling(false)
+    }
+  }
+
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true)
+    setImportError('')
+    try {
+      await cursosService.descargarPlantillaEstudiantes(cursoId)
+    } catch (err) {
+      setImportError(err.mensaje || 'No se pudo descargar la plantilla.')
+      setImportOpen(true)
+    } finally {
+      setDownloadingTemplate(false)
+    }
+  }
+
+  const handleImport = async (event) => {
+    event.preventDefault()
+    if (!importFile) {
+      setImportError('Selecciona la plantilla Excel completada.')
+      return
+    }
+    if (!importFile.name.toLowerCase().endsWith('.xlsx')) {
+      setImportError('El archivo debe tener formato .xlsx.')
+      return
+    }
+
+    setImporting(true)
+    setImportError('')
+    setActionSuccess('')
+    try {
+      const resultado = await cursosService.importarEstudiantes(cursoId, importFile)
+      setImportFile(null)
+      setImportOpen(false)
+      setActionSuccess(resultado.mensaje)
+      await fetchCurso()
+    } catch (err) {
+      setImportError(err.mensaje || 'No se pudo importar la plantilla.')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -292,9 +336,28 @@ function DetalleCursoDocente() {
               {curso.docente?.correo ?? ''}
             </p>
           </div>
-          <Button variant="outline" onClick={() => setEnrollOpen(true)}>
-            Matricular alumno
-          </Button>
+          <div className={styles.studentActions}>
+            <Button
+              variant="outline"
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate}
+            >
+              {downloadingTemplate ? 'Descargando…' : 'Descargar plantilla Excel'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setImportError('')
+                setImportFile(null)
+                setImportOpen(true)
+              }}
+            >
+              Importar Excel
+            </Button>
+            <Button variant="primary" onClick={() => setEnrollOpen(true)}>
+              Matricular alumno
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -546,6 +609,59 @@ function DetalleCursoDocente() {
                 setEnrollError('')
               }}
             />
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={importOpen}
+        onClose={() => !importing && setImportOpen(false)}
+        title={`Importar estudiantes en ${curso.nombre}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setImportOpen(false)} disabled={importing}>
+              Cancelar
+            </Button>
+            <Button variant="primary" type="submit" form="import-form" disabled={importing}>
+              {importing ? 'Importando…' : 'Importar estudiantes'}
+            </Button>
+          </>
+        }
+      >
+        <form id="import-form" className={styles.form} onSubmit={handleImport}>
+          <div className={styles.importHelp}>
+            <strong>Antes de importar</strong>
+            <span>
+              Usa la plantilla oficial y completa las columnas nombres, correo y
+              contrasena. Si existe un dato repetido, no se importará ninguna fila.
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate || importing}
+            >
+              {downloadingTemplate ? 'Descargando…' : 'Descargar plantilla'}
+            </Button>
+          </div>
+          {importError && <div className={styles.formError}>{importError}</div>}
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="studentsExcel">
+              Archivo Excel (.xlsx)
+            </label>
+            <input
+              id="studentsExcel"
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className={styles.fileInput}
+              onChange={(event) => {
+                setImportFile(event.target.files?.[0] || null)
+                setImportError('')
+              }}
+            />
+            {importFile && (
+              <span className={styles.selectedFile}>{importFile.name}</span>
+            )}
           </div>
         </form>
       </Modal>

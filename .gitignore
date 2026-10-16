@@ -14,3 +14,10 @@ dist-ssr/
 *.log
 .DS_Store
 Thumbs.db
+
+# Reportes temporales de pruebas
+.nyc_output/
+
+# Archivos del editor
+.vscode/
+.idea/

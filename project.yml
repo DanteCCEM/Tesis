@@ -1,0 +1,27 @@
+
+project:
+  name: "Sistema de Evaluacion personalizada"
+  version: 1.0.0
+  description: "Sistema web de evaluacion personalizada"
+
+stack:
+  detect: true
+
+# METADATOS ACADEMICOS PARA LA EVALUACION
+academic:
+  course: "Taller de Investigación II"
+  evaluation_name: "Evaluación Consolidado 2"
+  partial_weight_percentage: 80
+
+  # Docente evaluador
+  evaluator:
+    name: "Maglioni Arana Caparachin"
+    email: "marana@continental.edu.pe"
+    role: "Docente Evaluador"
+
+  # Integrantes del grupo
+  members:
+    - name: "Dante Edgar Chuquirachi Martinez"
+      code: "76177488"
+      email: "76177488@continental.edu.pe"
+  

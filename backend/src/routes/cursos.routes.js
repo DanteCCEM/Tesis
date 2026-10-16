@@ -4,6 +4,7 @@ const planCurricularController = require("../controllers/planCurricular.controll
 const authMiddleware = require("../middlewares/auth.middleware");
 const autorizarRoles = require("../middlewares/role.middleware");
 const subirPdfPlan = require("../middlewares/uploadPdf.middleware");
+const subirExcelEstudiantes = require("../middlewares/uploadExcel.middleware");
 const {
   validarCrearCurso,
   validarMatricula,
@@ -21,6 +22,19 @@ router.post("/", autorizarRoles("DOCENTE"), validarCrearCurso, cursosController.
 // Mis cursos (según el rol del usuario autenticado).
 // Debe declararse antes de "/:id" para no colisionar con la ruta dinámica.
 router.get("/mis-cursos", cursosController.misCursos);
+
+router.get(
+  "/:id/estudiantes/plantilla",
+  autorizarRoles("DOCENTE"),
+  cursosController.descargarPlantillaEstudiantes,
+);
+
+router.post(
+  "/:id/estudiantes/importar",
+  autorizarRoles("DOCENTE"),
+  subirExcelEstudiantes,
+  cursosController.importarEstudiantes,
+);
 
 // Resumen académico de estudiantes (solo DOCENTE propietario).
 router.get(

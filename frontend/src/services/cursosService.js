@@ -27,6 +27,43 @@ const cursosService = {
     return data.matricula
   },
 
+  async descargarPlantillaEstudiantes(cursoId) {
+    try {
+      const response = await api.get(`/cursos/${cursoId}/estudiantes/plantilla`, {
+        responseType: 'blob',
+      })
+      const url = window.URL.createObjectURL(response.data)
+      const enlace = document.createElement('a')
+      enlace.href = url
+      enlace.download = `plantilla-estudiantes-curso-${cursoId}.xlsx`
+      document.body.appendChild(enlace)
+      enlace.click()
+      enlace.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      if (error.response?.data instanceof Blob) {
+        try {
+          const detalle = JSON.parse(await error.response.data.text())
+          error.mensaje = detalle.error || detalle.message || error.mensaje
+        } catch {
+          // Conserva el mensaje normalizado por el interceptor.
+        }
+      }
+      throw error
+    }
+  },
+
+  async importarEstudiantes(cursoId, archivo) {
+    const formData = new FormData()
+    formData.append('archivo', archivo)
+    const { data } = await api.post(
+      `/cursos/${cursoId}/estudiantes/importar`,
+      formData,
+      { headers: { 'Content-Type': undefined } },
+    )
+    return data
+  },
+
   // GET /api/cursos/:id -> { ok, curso }
   async detalle(cursoId) {
     const { data } = await api.get(`/cursos/${cursoId}`)
