@@ -1,0 +1,4 @@
+# ACTIVACIÓN DEL PIPELINE DE EVALUACIÓN DE CALIDAD (SONARQUBE)
+include:
+  - project: "root/laboratorio-quality"
+    file: "/gitlab/quality-pipeline.yml"
