@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Button, Card, Modal, PageHeader } from '../../../components/index.js'
+import { Button, Card, PageHeader } from '../../../components/index.js'
 import cursosService from '../../../services/cursosService.js'
-import perfilService from '../../../services/perfilService.js'
 import styles from './DetalleCursoDocente.module.css'
 
 function getInitials(nombre) {
@@ -13,17 +12,6 @@ function getInitials(nombre) {
     .map((parte) => parte[0])
     .join('')
     .toUpperCase()
-}
-
-function formatFecha(valor) {
-  if (!valor) return '—'
-  const fecha = new Date(valor)
-  if (Number.isNaN(fecha.getTime())) return '—'
-  return fecha.toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
 }
 
 function getLevelClass(nivel) {
@@ -55,68 +43,6 @@ function DetalleCursoDocente() {
   const [loadingEstudiantes, setLoadingEstudiantes] = useState(true)
   const [error, setError] = useState('')
 
-  const [profileTarget, setProfileTarget] = useState(null)
-  const [profileData, setProfileData] = useState(null)
-  const [profileLoading, setProfileLoading] = useState(false)
-  const [profileError, setProfileError] = useState('')
-
-  const [enrollOpen, setEnrollOpen] = useState(false)
-  const [enrollEmail, setEnrollEmail] = useState('')
-  const [enrollError, setEnrollError] = useState('')
-  const [enrolling, setEnrolling] = useState(false)
-
-  const [importOpen, setImportOpen] = useState(false)
-  const [importFile, setImportFile] = useState(null)
-  const [importError, setImportError] = useState('')
-  const [importing, setImporting] = useState(false)
-  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
-
-  const [removeTarget, setRemoveTarget] = useState(null)
-  const [removeError, setRemoveError] = useState('')
-  const [removing, setRemoving] = useState(false)
-  const [actionSuccess, setActionSuccess] = useState('')
-
-  const fetchCurso = useCallback(async () => {
-    if (!Number.isInteger(cursoId) || cursoId <= 0) {
-      setError('Identificador de curso inválido.')
-      setLoading(false)
-      setLoadingEstudiantes(false)
-      return
-    }
-    setLoadingEstudiantes(true)
-    try {
-      const [dataCurso, dataEstudiantes] = await Promise.all([
-        cursosService.detalle(cursoId),
-        cursosService.resumenEstudiantes(cursoId),
-      ])
-      setCurso(dataCurso)
-      setEstudiantes(dataEstudiantes)
-      setError('')
-    } catch (err) {
-      setCurso(null)
-      setEstudiantes([])
-      setError(err.mensaje || 'No se pudo cargar el curso.')
-    } finally {
-      setLoading(false)
-      setLoadingEstudiantes(false)
-    }
-  }, [cursoId])
-
-  const openProfile = async (estudiante) => {
-    setProfileTarget(estudiante)
-    setProfileData(null)
-    setProfileError('')
-    setProfileLoading(true)
-    try {
-      const data = await perfilService.obtenerPerfilUsuario(estudiante.id)
-      setProfileData(data.perfil)
-    } catch (err) {
-      setProfileError(err.mensaje || 'No se pudo cargar el perfil del estudiante.')
-    } finally {
-      setProfileLoading(false)
-    }
-  }
-
   useEffect(() => {
     let cancelado = false
     Promise.all([
@@ -147,97 +73,6 @@ function DetalleCursoDocente() {
       cancelado = true
     }
   }, [cursoId])
-
-  const handleEnroll = async (event) => {
-    event.preventDefault()
-    if (!enrollEmail.trim()) {
-      setEnrollError('Ingresa el correo del estudiante.')
-      return
-    }
-    setEnrolling(true)
-    setEnrollError('')
-    setActionSuccess('')
-    try {
-      await cursosService.matricular(cursoId, { correo: enrollEmail.trim() })
-      setEnrollEmail('')
-      setEnrollOpen(false)
-      setActionSuccess('Estudiante matriculado correctamente.')
-      await fetchCurso()
-    } catch (err) {
-      setEnrollError(err.mensaje || 'No se pudo matricular al estudiante.')
-    } finally {
-      setEnrolling(false)
-    }
-  }
-
-  const handleDownloadTemplate = async () => {
-    setDownloadingTemplate(true)
-    setImportError('')
-    try {
-      await cursosService.descargarPlantillaEstudiantes(cursoId)
-    } catch (err) {
-      setImportError(err.mensaje || 'No se pudo descargar la plantilla.')
-      setImportOpen(true)
-    } finally {
-      setDownloadingTemplate(false)
-    }
-  }
-
-  const handleImport = async (event) => {
-    event.preventDefault()
-    if (!importFile) {
-      setImportError('Selecciona la plantilla Excel completada.')
-      return
-    }
-    if (!importFile.name.toLowerCase().endsWith('.xlsx')) {
-      setImportError('El archivo debe tener formato .xlsx.')
-      return
-    }
-
-    setImporting(true)
-    setImportError('')
-    setActionSuccess('')
-    try {
-      const resultado = await cursosService.importarEstudiantes(cursoId, importFile)
-      setImportFile(null)
-      setImportOpen(false)
-      setActionSuccess(resultado.mensaje)
-      await fetchCurso()
-    } catch (err) {
-      setImportError(err.mensaje || 'No se pudo importar la plantilla.')
-    } finally {
-      setImporting(false)
-    }
-  }
-
-  const executeRemove = async () => {
-    if (!removeTarget) return
-    setRemoving(true)
-    setRemoveError('')
-    setActionSuccess('')
-    try {
-      const resultado = await cursosService.eliminarMatricula(
-        cursoId,
-        removeTarget.id,
-      )
-      setEstudiantes(resultado.estudiantes ?? [])
-      setCurso((prev) =>
-        prev
-          ? {
-              ...prev,
-              cantidadEstudiantes: resultado.estudiantes?.length ?? 0,
-            }
-          : prev,
-      )
-      setActionSuccess(resultado.mensaje || 'Estudiante eliminado del curso.')
-      setRemoveTarget(null)
-      await fetchCurso()
-    } catch (err) {
-      setRemoveError(err.mensaje || 'No se pudo eliminar al estudiante.')
-    } finally {
-      setRemoving(false)
-    }
-  }
 
   if (loading) {
     return (
@@ -315,48 +150,19 @@ function DetalleCursoDocente() {
         }
       />
 
-      {actionSuccess && (
-        <div className={styles.feedback} role="status" style={{ marginBottom: '16px' }}>
-          {actionSuccess}
-        </div>
-      )}
-
       <div className={styles.hero}>
         <div className={styles.heroTop}>
           <div>
             <span className={styles.gradeBadge}>
-              {curso.grado} · Sección {curso.seccion}
+              {curso.grado} · Sección {curso.seccion} · {curso.anio}
             </span>
             <h1 className={styles.courseName}>{curso.nombre}</h1>
             <p className={styles.courseDesc}>
               {curso.descripcion || 'Sin descripción.'}
             </p>
             <p className={styles.teacher}>
-              Docente: {curso.docente?.nombres ?? '—'} ·{' '}
-              {curso.docente?.correo ?? ''}
+              Docente: {curso.docente?.nombres ?? '—'}
             </p>
-          </div>
-          <div className={styles.studentActions}>
-            <Button
-              variant="outline"
-              onClick={handleDownloadTemplate}
-              disabled={downloadingTemplate}
-            >
-              {downloadingTemplate ? 'Descargando…' : 'Descargar plantilla Excel'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setImportError('')
-                setImportFile(null)
-                setImportOpen(true)
-              }}
-            >
-              Importar Excel
-            </Button>
-            <Button variant="primary" onClick={() => setEnrollOpen(true)}>
-              Matricular alumno
-            </Button>
           </div>
         </div>
       </div>
@@ -394,7 +200,7 @@ function DetalleCursoDocente() {
               <thead>
                 <tr>
                   <th>Estudiante</th>
-                  <th>Correo</th>
+                  <th>Código / DNI</th>
                   <th>Evaluaciones</th>
                   <th>Promedio</th>
                   <th>Nivel</th>
@@ -414,7 +220,7 @@ function DetalleCursoDocente() {
                         <span>{est.nombres}</span>
                       </div>
                     </td>
-                    <td>{est.correo}</td>
+                    <td>{est.codigoEstudiante || est.dni || '—'}</td>
                     <td>{est.cantidadEvaluacionesRealizadas}</td>
                     <td>
                       {est.promedioGeneral != null
@@ -446,27 +252,7 @@ function DetalleCursoDocente() {
                         '—'
                       )}
                     </td>
-                    <td>
-                      <div className={styles.rowActions}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openProfile(est)}
-                        >
-                          Ver perfil
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setRemoveTarget(est)
-                            setRemoveError('')
-                          }}
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    </td>
+                    <td />
                   </tr>
                 ))}
               </tbody>
@@ -474,7 +260,7 @@ function DetalleCursoDocente() {
           </div>
         ) : (
           <p className={styles.emptyText}>
-            Aún no hay estudiantes matriculados en este curso.
+            La sección todavía no tiene estudiantes matriculados para este año.
           </p>
         )}
       </Card>
@@ -577,178 +363,6 @@ function DetalleCursoDocente() {
         )}
       </Card>
 
-      <Modal
-        isOpen={enrollOpen}
-        onClose={() => !enrolling && setEnrollOpen(false)}
-        title={`Matricular en ${curso.nombre}`}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setEnrollOpen(false)} disabled={enrolling}>
-              Cancelar
-            </Button>
-            <Button variant="primary" type="submit" form="enroll-form" disabled={enrolling}>
-              {enrolling ? 'Matriculando…' : 'Matricular'}
-            </Button>
-          </>
-        }
-      >
-        <form id="enroll-form" className={styles.form} onSubmit={handleEnroll}>
-          {enrollError && <div className={styles.formError}>{enrollError}</div>}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="enrollEmail">
-              Correo del estudiante
-            </label>
-            <input
-              id="enrollEmail"
-              type="email"
-              className={styles.input}
-              placeholder="estudiante@correo.com"
-              value={enrollEmail}
-              onChange={(e) => {
-                setEnrollEmail(e.target.value)
-                setEnrollError('')
-              }}
-            />
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={importOpen}
-        onClose={() => !importing && setImportOpen(false)}
-        title={`Importar estudiantes en ${curso.nombre}`}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setImportOpen(false)} disabled={importing}>
-              Cancelar
-            </Button>
-            <Button variant="primary" type="submit" form="import-form" disabled={importing}>
-              {importing ? 'Importando…' : 'Importar estudiantes'}
-            </Button>
-          </>
-        }
-      >
-        <form id="import-form" className={styles.form} onSubmit={handleImport}>
-          <div className={styles.importHelp}>
-            <strong>Antes de importar</strong>
-            <span>
-              Usa la plantilla oficial y completa las columnas nombres, correo y
-              contrasena. Si existe un dato repetido, no se importará ninguna fila.
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDownloadTemplate}
-              disabled={downloadingTemplate || importing}
-            >
-              {downloadingTemplate ? 'Descargando…' : 'Descargar plantilla'}
-            </Button>
-          </div>
-          {importError && <div className={styles.formError}>{importError}</div>}
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="studentsExcel">
-              Archivo Excel (.xlsx)
-            </label>
-            <input
-              id="studentsExcel"
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className={styles.fileInput}
-              onChange={(event) => {
-                setImportFile(event.target.files?.[0] || null)
-                setImportError('')
-              }}
-            />
-            {importFile && (
-              <span className={styles.selectedFile}>{importFile.name}</span>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(profileTarget)}
-        onClose={() => !profileLoading && setProfileTarget(null)}
-        title={profileTarget ? `Perfil de ${profileTarget.nombres}` : 'Perfil'}
-        footer={
-          <Button variant="ghost" onClick={() => setProfileTarget(null)}>
-            Cerrar
-          </Button>
-        }
-      >
-        {profileLoading ? (
-          <div className={styles.stateInline}>
-            <span className={styles.spinner} aria-hidden="true" />
-            <p className={styles.stateText}>Cargando perfil…</p>
-          </div>
-        ) : profileError ? (
-          <p className={styles.formError}>{profileError}</p>
-        ) : profileData ? (
-          <div className={styles.profileBody}>
-            <p>
-              <strong>Nombre:</strong> {profileData.nombres}
-            </p>
-            <p>
-              <strong>Correo:</strong> {profileData.correo}
-            </p>
-            {profileData.institucionEducativa && (
-              <p>
-                <strong>Institución:</strong> {profileData.institucionEducativa}
-              </p>
-            )}
-            {profileData.telefono && (
-              <p>
-                <strong>Teléfono:</strong> {profileData.telefono}
-              </p>
-            )}
-            {profileData.biografiaCorta && (
-              <p>
-                <strong>Biografía:</strong> {profileData.biografiaCorta}
-              </p>
-            )}
-            {profileTarget?.ultimaEvaluacion && (
-              <p>
-                <strong>Última evaluación en este curso:</strong>{' '}
-                {profileTarget.ultimaEvaluacion.titulo} (
-                {formatFecha(profileTarget.ultimaEvaluacion.fechaFin)})
-              </p>
-            )}
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(removeTarget)}
-        onClose={() => !removing && setRemoveTarget(null)}
-        title="Confirmar eliminación"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setRemoveTarget(null)} disabled={removing}>
-              Cancelar
-            </Button>
-            <Button variant="primary" onClick={executeRemove} disabled={removing}>
-              {removing ? 'Eliminando…' : 'Sí, eliminar del curso'}
-            </Button>
-          </>
-        }
-      >
-        {removeTarget && (
-          <>
-            <p className={styles.confirmText}>
-              ¿Eliminar a <strong>{removeTarget.nombres}</strong> de este curso?
-            </p>
-            <p className={styles.confirmHint}>
-              Se quitará la matrícula, pero se conservarán sus resultados
-              históricos.
-            </p>
-            {removeError && (
-              <div className={styles.formError} style={{ marginTop: '14px' }}>
-                {removeError}
-              </div>
-            )}
-          </>
-        )}
-      </Modal>
     </>
   )
 }

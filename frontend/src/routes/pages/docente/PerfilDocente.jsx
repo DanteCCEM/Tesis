@@ -180,7 +180,7 @@ function PerfilDocente() {
             <span className={styles.avatar}>{getInitials(perfil?.nombres ?? 'D')}</span>
           )}
           <h2 className={styles.name}>{perfil?.nombres}</h2>
-          <p className={styles.role}>Docente · {perfil?.correo}</p>
+          <p className={styles.role}>Docente · @{perfil?.username}</p>
           {perfil?.institucionEducativa && (
             <p className={styles.institution}>{perfil.institucionEducativa}</p>
           )}

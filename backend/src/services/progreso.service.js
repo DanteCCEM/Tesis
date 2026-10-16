@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
+const { verificarEstudianteCurso } = require("./accesoAcademico.service");
 const {
   determinarNivel,
   construirRecomendacion,
@@ -155,18 +156,7 @@ const construirPorTema = (intentos, progresos) => {
 };
 
 const verificarMatricula = async (estudianteId, cursoId) => {
-  const matricula = await prisma.matricula.findUnique({
-    where: {
-      estudianteId_cursoId: {
-        estudianteId,
-        cursoId,
-      },
-    },
-  });
-
-  if (!matricula) {
-    throw ApiError.forbidden("No estás matriculado en este curso");
-  }
+  await verificarEstudianteCurso(cursoId, estudianteId);
 };
 
 // Capa de acceso a datos / lógica de negocio para ProgresoEstudiante.

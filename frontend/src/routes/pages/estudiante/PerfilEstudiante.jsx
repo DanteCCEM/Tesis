@@ -185,7 +185,7 @@ function PerfilEstudiante() {
             <span className={styles.avatar}>{getInitials(perfil?.nombres ?? 'E')}</span>
           )}
           <h2 className={styles.name}>{perfil?.nombres}</h2>
-          <p className={styles.role}>Estudiante · {perfil?.correo}</p>
+          <p className={styles.role}>Estudiante · @{perfil?.username}</p>
           {perfil?.institucionEducativa && (
             <p className={styles.institution}>{perfil.institucionEducativa}</p>
           )}

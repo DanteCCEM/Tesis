@@ -1,11 +1,11 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 
 import AppLayout from '../layouts/AppLayout/AppLayout.jsx'
 import ProtectedRoute from './ProtectedRoute.jsx'
 
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
-import Registro from './pages/Registro.jsx'
+import CambiarPassword from './pages/CambiarPassword.jsx'
 import NotFound from './pages/NotFound.jsx'
 
 import DocenteDashboard from './pages/docente/Dashboard.jsx'
@@ -24,6 +24,9 @@ import EstudianteEvaluacion from './pages/estudiante/Evaluacion.jsx'
 import EstudianteResultados from './pages/estudiante/Resultados.jsx'
 import EstudianteProgreso from './pages/estudiante/Progreso.jsx'
 import PerfilEstudiante from './pages/estudiante/PerfilEstudiante.jsx'
+import GestionUsuarios from './pages/admin/GestionUsuarios.jsx'
+import AdminAsignaciones from './pages/admin/Asignaciones.jsx'
+import AdminPlaceholder from './pages/admin/AdminPlaceholder.jsx'
 
 function AppRoutes() {
   const location = useLocation()
@@ -32,7 +35,10 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/registro" element={<Registro />} />
+      <Route path="/registro" element={<Navigate to="/login" replace />} />
+      <Route element={<ProtectedRoute allowPasswordChange />}>
+        <Route path="/cambiar-password" element={<CambiarPassword />} />
+      </Route>
 
       <Route element={<ProtectedRoute role="DOCENTE" />}>
         <Route element={<AppLayout role="docente" />}>
@@ -68,6 +74,19 @@ function AppRoutes() {
           <Route path="/estudiante/resultados" element={<EstudianteResultados />} />
           <Route path="/estudiante/progreso" element={<EstudianteProgreso />} />
           <Route path="/estudiante/perfil" element={<PerfilEstudiante />} />
+        </Route>
+      </Route>
+
+      <Route element={<ProtectedRoute role="ADMIN" />}>
+        <Route element={<AppLayout role="admin" />}>
+          <Route path="/admin/dashboard" element={<AdminPlaceholder title="Dashboard" />} />
+          <Route path="/admin/docentes" element={<GestionUsuarios tipo="docentes" />} />
+          <Route path="/admin/estudiantes" element={<GestionUsuarios tipo="estudiantes" />} />
+          <Route path="/admin/estructura-academica" element={<AdminPlaceholder title="Estructura académica" />} />
+          <Route path="/admin/asignaciones" element={<AdminAsignaciones />} />
+          <Route path="/admin/calificaciones" element={<AdminPlaceholder title="Calificaciones" />} />
+          <Route path="/admin/auditoria" element={<AdminPlaceholder title="Auditoría" />} />
+          <Route path="/admin/configuracion" element={<AdminPlaceholder title="Configuración" />} />
         </Route>
       </Route>
 

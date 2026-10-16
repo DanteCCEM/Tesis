@@ -4,8 +4,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_BIO = 500;
 const MAX_URL = 2048;
 
-// PUT /api/perfil
-const validarActualizarPerfil = (req, res, next) => {
+const validarActualizarPerfil = (req, _res, next) => {
   const {
     nombres,
     correo,
@@ -19,16 +18,12 @@ const validarActualizarPerfil = (req, res, next) => {
   if (nombres !== undefined && !String(nombres).trim()) {
     errores.push("nombres no puede estar vacío");
   }
-  if (correo !== undefined) {
-    if (!String(correo).trim()) {
-      errores.push("correo no puede estar vacío");
-    } else if (!EMAIL_REGEX.test(String(correo).trim())) {
-      errores.push("correo no tiene un formato válido");
-    }
+  const correoNormalizado = String(correo ?? "").trim();
+  if (correo !== undefined && correoNormalizado && !EMAIL_REGEX.test(correoNormalizado)) {
+    errores.push("correo no tiene un formato válido");
   }
   if (fotoPerfil !== undefined && fotoPerfil !== null && fotoPerfil !== "") {
-    const url = String(fotoPerfil).trim();
-    if (url.length > MAX_URL) {
+    if (String(fotoPerfil).trim().length > MAX_URL) {
       errores.push("fotoPerfil excede la longitud máxima permitida");
     }
   }
@@ -49,10 +44,7 @@ const validarActualizarPerfil = (req, res, next) => {
   ) {
     errores.push(`biografía corta no puede superar ${MAX_BIO} caracteres`);
   }
-
-  if (errores.length > 0) {
-    return next(ApiError.badRequest(errores.join("; ")));
-  }
+  if (errores.length) return next(ApiError.badRequest(errores.join("; ")));
   next();
 };
 

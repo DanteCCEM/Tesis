@@ -3,7 +3,11 @@ import styles from './Navbar.module.css'
 
 function Navbar({ onMenuClick, role }) {
   const roleLabel =
-    role === 'docente' ? 'Docente' : role === 'estudiante' ? 'Estudiante' : null
+    role === 'docente'
+      ? 'Docente'
+      : role === 'estudiante'
+        ? 'Estudiante'
+        : role === 'admin' ? 'Administrador' : null
 
   return (
     <header className={styles.navbar}>

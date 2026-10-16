@@ -5,6 +5,10 @@ const {
   UMBRALES,
 } = require("./adaptiveLearningService");
 const aiService = require("./aiService");
+const {
+  verificarEstudianteCurso,
+  obtenerContextoCurso,
+} = require("./accesoAcademico.service");
 
 const MIN_EVALUACIONES = 1;
 const CANTIDAD_PREGUNTAS = 5;
@@ -243,14 +247,8 @@ const practicasAdaptativasService = {
     const ultimoIntento = intentos[0];
     const cursoObjetivoId = cursoId ? Number(cursoId) : ultimoIntento.evaluacion.cursoId;
 
-    const matricula = await prisma.matricula.findUnique({
-      where: {
-        estudianteId_cursoId: { estudianteId, cursoId: cursoObjetivoId },
-      },
-    });
-    if (!matricula) {
-      throw ApiError.forbidden("No estás matriculado en el curso seleccionado");
-    }
+    await verificarEstudianteCurso(cursoObjetivoId, estudianteId);
+    const contextoCurso = await obtenerContextoCurso(cursoObjetivoId);
 
     const curso = await prisma.curso.findUnique({
       where: { id: cursoObjetivoId },
@@ -343,7 +341,7 @@ const practicasAdaptativasService = {
           esPracticaAdaptativa: true,
           estudianteObjetivoId: estudianteId,
           cursoId: cursoObjetivoId,
-          docenteId: curso.docenteId,
+          docenteId: contextoCurso.asignacionCurso.docenteId,
         },
       });
 

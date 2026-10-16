@@ -35,11 +35,10 @@ api.interceptors.response.use(
     error.mensaje = mensaje
 
     // Sesión expirada o token inválido: limpiamos la sesión y enviamos al login.
-    // No aplica a las llamadas de login/registro (ahí el 401 es "credenciales
-    // inválidas" y debe mostrarse en la propia pantalla).
+    // No aplica al login: allí el 401 significa "credenciales inválidas" y
+    // debe mostrarse en la propia pantalla.
     const url = error.config?.url || ''
-    const esLlamadaAuth =
-      url.includes('/auth/login') || url.includes('/auth/registro')
+    const esLlamadaAuth = url.includes('/auth/login')
     const teniaToken = localStorage.getItem(TOKEN_KEY)
 
     if (error.response?.status === 401 && !esLlamadaAuth && teniaToken) {
@@ -47,6 +46,26 @@ api.interceptors.response.use(
       localStorage.removeItem(USER_KEY)
       if (window.location.pathname !== '/login') {
         window.location.assign('/login')
+      }
+    }
+
+    if (
+      error.response?.status === 403 &&
+      respuesta?.code === 'PASSWORD_CHANGE_REQUIRED' &&
+      teniaToken
+    ) {
+      const raw = localStorage.getItem(USER_KEY)
+      try {
+        const usuario = JSON.parse(raw)
+        localStorage.setItem(
+          USER_KEY,
+          JSON.stringify({ ...usuario, debeCambiarPassword: true }),
+        )
+      } catch {
+        // La ruta protegida volverá a validar la sesión almacenada.
+      }
+      if (window.location.pathname !== '/cambiar-password') {
+        window.location.assign('/cambiar-password')
       }
     }
 

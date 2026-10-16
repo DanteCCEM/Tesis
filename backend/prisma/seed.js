@@ -2,8 +2,8 @@
 // Uso:  node prisma/seed.js   (desde la carpeta backend)
 //
 // Crea (de forma idempotente):
-//   - 1 docente:     docente@demo.com    / 123456
-//   - 1 estudiante:  estudiante@demo.com / 123456
+//   - 1 docente:     docente.demo    / 12345678
+//   - 1 estudiante:  estudiante.demo / 12345678
 //   - 1 curso del docente con el estudiante matriculado
 //   - 1 evaluación PUBLICADA con 3 preguntas (opción múltiple,
 //     verdadero/falso y respuesta corta)
@@ -17,29 +17,75 @@ const prisma = require("../src/config/prisma");
 
 const SALT_ROUNDS = 10;
 
-async function upsertUsuario({ nombres, correo, contrasena, rol }) {
-  const existente = await prisma.usuario.findUnique({ where: { correo } });
-  if (existente) return existente;
+async function upsertUsuario({
+  username,
+  nombres,
+  correo,
+  contrasena,
+  rol,
+  debeCambiarPassword = false,
+}) {
+  const usernameNormalizado = String(username).trim().toLowerCase();
+  const correoNormalizado = correo ? String(correo).trim().toLowerCase() : null;
+  const [porUsername, porCorreo] = await Promise.all([
+    prisma.usuario.findUnique({ where: { username: usernameNormalizado } }),
+    correoNormalizado
+      ? prisma.usuario.findUnique({ where: { correo: correoNormalizado } })
+      : null,
+  ]);
+
+  if (porUsername && porCorreo && porUsername.id !== porCorreo.id) {
+    throw new Error(
+      `Conflicto de seed: username "${usernameNormalizado}" y correo "${correoNormalizado}" pertenecen a usuarios diferentes (ids ${porUsername.id} y ${porCorreo.id}).`,
+    );
+  }
+
+  // El seed nunca actualiza cuentas existentes: así no cambia contraseñas,
+  // roles, estado ni datos personales en cada reinicio.
+  if (porUsername || porCorreo) return porUsername || porCorreo;
+
   const hash = await bcrypt.hash(contrasena, SALT_ROUNDS);
   return prisma.usuario.create({
-    data: { nombres, correo, contrasena: hash, rol },
+    data: {
+      username: usernameNormalizado,
+      nombres,
+      correo: correoNormalizado,
+      contrasena: hash,
+      rol,
+      debeCambiarPassword,
+    },
   });
 }
 
 async function main() {
   // 1) Usuarios
   const docente = await upsertUsuario({
+    username: "docente.demo",
     nombres: "Docente Demo",
     correo: "docente@demo.com",
-    contrasena: "123456",
+    contrasena: "12345678",
     rol: "DOCENTE",
   });
   const estudiante = await upsertUsuario({
+    username: "estudiante.demo",
     nombres: "Estudiante Demo",
     correo: "estudiante@demo.com",
-    contrasena: "123456",
+    contrasena: "12345678",
     rol: "ESTUDIANTE",
   });
+
+  // Crea un administrador inicial solo cuando sus credenciales se proporcionan
+  // explícitamente mediante variables de entorno.
+  if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+    await upsertUsuario({
+      username: process.env.ADMIN_USERNAME.trim().toLowerCase(),
+      nombres: process.env.ADMIN_NOMBRES || "Administrador",
+      correo: process.env.ADMIN_CORREO?.trim().toLowerCase() || null,
+      contrasena: process.env.ADMIN_PASSWORD,
+      rol: "ADMIN",
+      debeCambiarPassword: true,
+    });
+  }
 
   // 2) Curso del docente
   let curso = await prisma.curso.findFirst({
@@ -141,17 +187,22 @@ async function main() {
   }
 
   console.log("Datos de prueba listos:");
-  console.log("  Docente:     docente@demo.com / 123456");
-  console.log("  Estudiante:  estudiante@demo.com / 123456");
+  console.log(`  Docente:     ${docente.username}`);
+  console.log(`  Estudiante:  ${estudiante.username}`);
+  console.log("  Las contraseñas existentes se conservan; no se imprimen ni se sobrescriben.");
   console.log(`  Curso:       ${curso.nombre} (id ${curso.id})`);
   console.log(`  Evaluación:  ${tituloEval} (id ${evaluacion.id}) [PUBLICADA]`);
 }
 
-main()
-  .catch((error) => {
-    console.error("Error al sembrar datos:", error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      console.error("Error al sembrar datos:", error.message || error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
+
+module.exports = { main, upsertUsuario };

@@ -25,6 +25,19 @@ const ICONS = {
       <path d="M8 7h8M8 11h8M8 15h5" />
     </>
   ),
+  users: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19 15.5v3h-3M5 8.5v-3h3M18.4 8A7 7 0 0 0 6 6M5.6 16A7 7 0 0 0 18 18" />
+    </>
+  ),
   logout: (
     <>
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -57,6 +70,16 @@ const NAV_ITEMS = {
     { to: '/estudiante/resultados', label: 'Resultados', icon: 'resultados' },
     { to: '/estudiante/perfil', label: 'Mi perfil', icon: 'perfil' },
   ],
+  admin: [
+    { to: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { to: '/admin/docentes', label: 'Docentes', icon: 'users' },
+    { to: '/admin/estudiantes', label: 'Estudiantes', icon: 'users' },
+    { to: '/admin/estructura-academica', label: 'Estructura académica', icon: 'plan' },
+    { to: '/admin/asignaciones', label: 'Asignaciones', icon: 'cursos' },
+    { to: '/admin/calificaciones', label: 'Calificaciones', icon: 'resultados' },
+    { to: '/admin/auditoria', label: 'Auditoría', icon: 'progreso' },
+    { to: '/admin/configuracion', label: 'Configuración', icon: 'settings' },
+  ],
 }
 
 function Icon({ name }) {
@@ -80,7 +103,11 @@ function Sidebar({ role = 'docente', isOpen = false, onNavigate }) {
   const navigate = useNavigate()
   const location = useLocation()
   const items = NAV_ITEMS[role] ?? []
-  const sectionLabel = role === 'docente' ? 'Panel docente' : 'Panel estudiante'
+  const sectionLabel = role === 'docente'
+    ? 'Panel docente'
+    : role === 'estudiante'
+      ? 'Panel estudiante'
+      : 'Panel administrador'
 
   const classes = [styles.sidebar, isOpen ? styles.open : '']
     .filter(Boolean)

@@ -4,14 +4,9 @@ import { Button } from '../../components/index.js'
 import authService from '../../services/authService.js'
 import styles from './Login.module.css'
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 function Login() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({
-    email: '',
-    password: '',
-  })
+  const [form, setForm] = useState({ username: '', password: '' })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
@@ -20,46 +15,31 @@ function Login() {
     setErrors((prev) => ({ ...prev, [field]: undefined, form: undefined }))
   }
 
-  const validate = () => {
-    const nextErrors = {}
-
-    if (!form.email.trim()) {
-      nextErrors.email = 'El correo es obligatorio.'
-    } else if (!EMAIL_REGEX.test(form.email.trim())) {
-      nextErrors.email = 'Ingresa un correo con un formato válido.'
-    }
-
-    if (!form.password) {
-      nextErrors.password = 'La contraseña es obligatoria.'
-    }
-
-    return nextErrors
-  }
-
   const handleSubmit = async (event) => {
     event.preventDefault()
-    const nextErrors = validate()
-
-    if (Object.keys(nextErrors).length > 0) {
+    const nextErrors = {}
+    if (!form.username.trim()) nextErrors.username = 'El usuario es obligatorio.'
+    if (!form.password) nextErrors.password = 'La contraseña es obligatoria.'
+    if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
       return
     }
 
-    setErrors({})
     setLoading(true)
-
+    setErrors({})
     try {
       const { usuario } = await authService.login({
-        correo: form.email.trim(),
+        username: form.username.trim(),
         contrasena: form.password,
       })
-
-      if (usuario?.rol === 'DOCENTE') {
-        navigate('/docente/dashboard')
+      if (usuario?.debeCambiarPassword) {
+        navigate('/cambiar-password', { replace: true })
+      } else if (usuario?.rol === 'DOCENTE') {
+        navigate('/docente/dashboard', { replace: true })
       } else if (usuario?.rol === 'ESTUDIANTE') {
-        navigate('/estudiante/dashboard')
+        navigate('/estudiante/dashboard', { replace: true })
       } else {
-        navigate('/')
+        navigate('/admin/dashboard', { replace: true })
       }
     } catch (error) {
       setErrors({ form: error.mensaje || 'No se pudo iniciar sesión.' })
@@ -72,81 +52,37 @@ function Login() {
     <div className={styles.page}>
       <div className={styles.card}>
         <Link to="/" className={styles.logo}>
-          <span className={styles.logoMark} aria-hidden="true">
-            E
-          </span>
-          <span className={styles.logoText}>
-            Evalua<span className={styles.logoAccent}>IA</span>
-          </span>
+          <span className={styles.logoMark} aria-hidden="true">E</span>
+          <span className={styles.logoText}>Evalua<span className={styles.logoAccent}>IA</span></span>
         </Link>
-
         <h1 className={styles.title}>Iniciar sesión</h1>
         <p className={styles.subtitle}>
-          Accede con tu correo y contraseña. Serás redirigido según tu rol en
-          el sistema.
+          Accede con tu usuario institucional y contraseña.
         </p>
-
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
           {errors.form && <div className={styles.formError}>{errors.form}</div>}
-
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="email">
-              Correo electrónico
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className={`${styles.input} ${
-                errors.email ? styles.inputError : ''
-              }`}
-              placeholder="tu@correo.com"
-              value={form.email}
-              onChange={handleChange('email')}
-              aria-invalid={Boolean(errors.email)}
-            />
-            {errors.email && (
-              <span className={styles.errorText}>{errors.email}</span>
-            )}
+            <label className={styles.label} htmlFor="username">Usuario institucional</label>
+            <input id="username" type="text" autoComplete="username"
+              className={`${styles.input} ${errors.username ? styles.inputError : ''}`}
+              placeholder="usuario.institucional" value={form.username}
+              onChange={handleChange('username')} aria-invalid={Boolean(errors.username)} />
+            {errors.username && <span className={styles.errorText}>{errors.username}</span>}
           </div>
-
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="password">
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              className={`${styles.input} ${
-                errors.password ? styles.inputError : ''
-              }`}
-              placeholder="••••••••"
-              value={form.password}
-              onChange={handleChange('password')}
-              aria-invalid={Boolean(errors.password)}
-            />
-            {errors.password && (
-              <span className={styles.errorText}>{errors.password}</span>
-            )}
+            <label className={styles.label} htmlFor="password">Contraseña</label>
+            <input id="password" type="password" autoComplete="current-password"
+              className={`${styles.input} ${errors.password ? styles.inputError : ''}`}
+              value={form.password} onChange={handleChange('password')}
+              aria-invalid={Boolean(errors.password)} />
+            {errors.password && <span className={styles.errorText}>{errors.password}</span>}
           </div>
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            fullWidth
-            disabled={loading}
-          >
+          <Button type="submit" variant="primary" size="lg" fullWidth disabled={loading}>
             {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}
           </Button>
         </form>
-
         <p className={styles.footer}>
-          ¿No tienes cuenta?{' '}
-          <Link to="/registro" className={styles.link}>
-            Regístrate
-          </Link>
+          Las cuentas son creadas por el administrador de la institución.
         </p>
       </div>
     </div>

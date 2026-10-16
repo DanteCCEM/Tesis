@@ -1,50 +1,25 @@
 const ApiError = require("../utils/ApiError");
+const { validarPasswordSegura } = require("../utils/password");
 
-const ROLES = ["DOCENTE", "ESTUDIANTE"];
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_REGEX = /^[a-z0-9._-]{3,40}$/;
 
-// Valida el cuerpo de POST /api/auth/registro.
-const validarRegistro = (req, res, next) => {
-  const { nombres, correo, contrasena, rol } = req.body ?? {};
+const validarLogin = (req, _res, next) => {
+  const { username, contrasena } = req.body ?? {};
   const errores = [];
-
-  if (!nombres || !String(nombres).trim()) {
-    errores.push("nombres es obligatorio");
-  }
-  if (!correo || !String(correo).trim()) {
-    errores.push("correo es obligatorio");
-  } else if (!EMAIL_REGEX.test(correo)) {
-    errores.push("correo no tiene un formato válido");
-  }
-  if (!contrasena || String(contrasena).length < 6) {
-    errores.push("contraseña es obligatoria y debe tener al menos 6 caracteres");
-  }
-  if (!rol || !ROLES.includes(rol)) {
-    errores.push(`rol es obligatorio y debe ser uno de: ${ROLES.join(", ")}`);
-  }
-
-  if (errores.length > 0) {
-    return next(ApiError.badRequest(errores.join("; ")));
-  }
+  if (!username || !String(username).trim()) errores.push("username es obligatorio");
+  if (!contrasena) errores.push("contraseña es obligatoria");
+  if (errores.length) return next(ApiError.badRequest(errores.join("; ")));
   next();
 };
 
-// Valida el cuerpo de POST /api/auth/login.
-const validarLogin = (req, res, next) => {
-  const { correo, contrasena } = req.body ?? {};
+const validarCambioPassword = (req, _res, next) => {
+  const { contrasenaActual, nuevaContrasena } = req.body ?? {};
   const errores = [];
-
-  if (!correo || !String(correo).trim()) {
-    errores.push("correo es obligatorio");
-  }
-  if (!contrasena) {
-    errores.push("contraseña es obligatoria");
-  }
-
-  if (errores.length > 0) {
-    return next(ApiError.badRequest(errores.join("; ")));
-  }
+  if (!contrasenaActual) errores.push("contraseña actual es obligatoria");
+  const errorPassword = validarPasswordSegura(nuevaContrasena);
+  if (errorPassword) errores.push(`nueva contraseña ${errorPassword}`);
+  if (errores.length) return next(ApiError.badRequest(errores.join("; ")));
   next();
 };
 
-module.exports = { validarRegistro, validarLogin, ROLES };
+module.exports = { validarLogin, validarCambioPassword, USERNAME_REGEX };

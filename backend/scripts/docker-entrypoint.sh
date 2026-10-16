@@ -9,5 +9,10 @@ if [ "$RUN_SEED" = "true" ]; then
   npm run seed
 fi
 
+if [ "$#" -gt 0 ]; then
+  echo "Ejecutando comando explícito: $*"
+  exec "$@"
+fi
+
 echo "Iniciando API en el puerto ${PORT:-3000}..."
 exec node src/server.js

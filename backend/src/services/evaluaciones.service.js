@@ -1,17 +1,11 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const planCurricularService = require("./planCurricular.service");
+const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
 
 // Verifica que el curso exista y pertenezca al docente indicado.
 const verificarCursoPropio = async (cursoId, docenteId) => {
-  const curso = await prisma.curso.findUnique({ where: { id: cursoId } });
-  if (!curso) {
-    throw ApiError.notFound("Curso no encontrado");
-  }
-  if (curso.docenteId !== docenteId) {
-    throw ApiError.forbidden("No eres el propietario de este curso");
-  }
-  return curso;
+  return verificarDocenteCurso(cursoId, docenteId);
 };
 
 // Verifica que la evaluación exista y pertenezca al docente indicado.
@@ -22,18 +16,14 @@ const verificarEvaluacionPropia = async (evaluacionId, docenteId) => {
   if (!evaluacion) {
     throw ApiError.notFound("Evaluación no encontrada");
   }
-  if (evaluacion.docenteId !== docenteId) {
-    throw ApiError.forbidden("No eres el propietario de esta evaluación");
-  }
+  await verificarDocenteCurso(evaluacion.cursoId, docenteId);
   return evaluacion;
 };
 
 // Indica si el estudiante está matriculado en el curso.
 const estaMatriculado = async (cursoId, estudianteId) => {
-  const matricula = await prisma.matricula.findUnique({
-    where: { estudianteId_cursoId: { estudianteId, cursoId } },
-  });
-  return Boolean(matricula);
+  await verificarEstudianteCurso(cursoId, estudianteId);
+  return true;
 };
 
 // Normaliza distintas formas de "verdadero/falso" a un valor canónico.
@@ -153,9 +143,7 @@ const evaluacionesService = {
     }
 
     if (usuario.rol === "DOCENTE") {
-      if (curso.docenteId !== usuario.id) {
-        throw ApiError.forbidden("No eres el propietario de este curso");
-      }
+      await verificarDocenteCurso(cursoId, usuario.id);
       return prisma.evaluacion.findMany({
         where: { cursoId, esPracticaAdaptativa: false },
         orderBy: { createdAt: "desc" },
@@ -227,9 +215,7 @@ const evaluacionesService = {
     }
 
     if (usuario.rol === "DOCENTE") {
-      if (evaluacion.docenteId !== usuario.id) {
-        throw ApiError.forbidden("No eres el propietario de esta evaluación");
-      }
+      await verificarDocenteCurso(evaluacion.cursoId, usuario.id);
       return evaluacion;
     }
 
@@ -331,8 +317,15 @@ const evaluacionesService = {
       },
     });
 
+    const contextoCurso = await verificarDocenteCurso(evaluacion.cursoId, docenteId);
     const [estudiantesMatriculados, intentos] = await Promise.all([
-      prisma.matricula.count({ where: { cursoId: evaluacion.cursoId } }),
+      prisma.matriculaAcademica.count({
+        where: {
+          seccionId: contextoCurso.asignacionCurso.seccionId,
+          anioAcademicoId: contextoCurso.asignacionCurso.anioAcademicoId,
+          estado: "ACTIVO",
+        },
+      }),
       prisma.intentoEvaluacion.findMany({
         where: { evaluacionId, estado: "FINALIZADO" },
         include: {

@@ -1,6 +1,7 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const aiService = require("./aiService");
+const { verificarDocenteCurso } = require("./accesoAcademico.service");
 
 const registrarSolicitudIA = (usuario, accion, detalle = {}) => {
   console.info(
@@ -9,7 +10,7 @@ const registrarSolicitudIA = (usuario, accion, detalle = {}) => {
       timestamp: new Date().toISOString(),
       accion,
       usuarioId: usuario.id,
-      correo: usuario.correo,
+      username: usuario.username,
       rol: usuario.rol,
       ...detalle,
     }),
@@ -43,9 +44,7 @@ const verificarAccesoRetroalimentacion = async (intentoId, usuario) => {
       throw ApiError.forbidden("Este intento no te pertenece");
     }
   } else if (usuario.rol === "DOCENTE") {
-    if (intento.evaluacion.curso.docenteId !== usuario.id) {
-      throw ApiError.forbidden("No eres el propietario del curso de este intento");
-    }
+    await verificarDocenteCurso(intento.evaluacion.curso.id, usuario.id);
   } else {
     throw ApiError.forbidden("No tienes permisos para solicitar retroalimentación");
   }
@@ -107,7 +106,7 @@ const iaServiceLayer = {
       borrador: true,
       solicitadoPor: {
         id: usuario.id,
-        correo: usuario.correo,
+        username: usuario.username,
       },
       ...borrador,
     };
@@ -161,7 +160,7 @@ const iaServiceLayer = {
       cached: false,
       solicitadoPor: {
         id: usuario.id,
-        correo: usuario.correo,
+        username: usuario.username,
       },
       retroalimentacion: payloadGuardado,
     };

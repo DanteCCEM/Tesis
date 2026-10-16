@@ -41,7 +41,11 @@ services:
       GEMINI_RETRY_BASE_MS: ${GEMINI_RETRY_BASE_MS:-1500}
       PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
-      RUN_SEED: ${RUN_SEED:-true}
+      RUN_SEED: ${RUN_SEED:-false}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NOMBRES: ${ADMIN_NOMBRES:-Administrador}
+      ADMIN_CORREO: ${ADMIN_CORREO:-}
       NODE_ENV: production
     ports:
       - "3000:3000"

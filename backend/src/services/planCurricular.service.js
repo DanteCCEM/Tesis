@@ -5,6 +5,7 @@ const ApiError = require("../utils/ApiError");
 const aiService = require("./aiService");
 const pdfExtractService = require("./pdfExtract.service");
 const { sanitizeOriginalName } = require("../config/upload");
+const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
 
 const PERIODOS = ["SEMESTRE", "BIMESTRE", "TRIMESTRE"];
 const ESTADOS_PLAN = ["BORRADOR", "PUBLICADO"];
@@ -33,20 +34,11 @@ const obtenerCurso = async (cursoId) => {
 };
 
 const verificarDocentePropietario = async (cursoId, docenteId) => {
-  const curso = await obtenerCurso(cursoId);
-  if (curso.docenteId !== docenteId) {
-    throw ApiError.forbidden("No eres el propietario de este curso");
-  }
-  return curso;
+  return verificarDocenteCurso(cursoId, docenteId);
 };
 
 const verificarEstudianteMatriculado = async (cursoId, estudianteId) => {
-  const matricula = await prisma.matricula.findUnique({
-    where: { estudianteId_cursoId: { estudianteId, cursoId } },
-  });
-  if (!matricula) {
-    throw ApiError.forbidden("No estás matriculado en este curso");
-  }
+  await verificarEstudianteCurso(cursoId, estudianteId);
 };
 
 const obtenerPlan = async (planId) => {
@@ -62,9 +54,7 @@ const obtenerPlan = async (planId) => {
 
 const verificarPlanDocente = async (planId, docenteId) => {
   const plan = await obtenerPlan(planId);
-  if (plan.curso.docenteId !== docenteId) {
-    throw ApiError.forbidden("No eres el propietario de este plan curricular");
-  }
+  await verificarDocenteCurso(plan.cursoId, docenteId);
   return plan;
 };
 
@@ -79,9 +69,7 @@ const verificarAccesoLecturaPlan = async (planId, usuario) => {
   }
 
   if (usuario.rol === "DOCENTE") {
-    if (plan.curso.docenteId !== usuario.id) {
-      throw ApiError.forbidden("No eres el propietario de este plan curricular");
-    }
+    await verificarDocenteCurso(plan.cursoId, usuario.id);
     return plan;
   }
 
@@ -337,9 +325,7 @@ const planCurricularService = {
     if (!unidad) {
       throw ApiError.notFound("Unidad curricular no encontrada");
     }
-    if (unidad.planCurricular.curso.docenteId !== docenteId) {
-      throw ApiError.forbidden("No eres el propietario de esta unidad curricular");
-    }
+    await verificarDocenteCurso(unidad.planCurricular.curso.id, docenteId);
 
     const data = {};
     if (datos.titulo !== undefined) data.titulo = String(datos.titulo).trim();
@@ -360,9 +346,7 @@ const planCurricularService = {
     if (!unidad) {
       throw ApiError.notFound("Unidad curricular no encontrada");
     }
-    if (unidad.planCurricular.curso.docenteId !== docenteId) {
-      throw ApiError.forbidden("No eres el propietario de esta unidad curricular");
-    }
+    await verificarDocenteCurso(unidad.planCurricular.curso.id, docenteId);
 
     await prisma.unidadCurricular.delete({ where: { id: unidadId } });
     return { ok: true, mensaje: "Unidad curricular eliminada" };
@@ -377,9 +361,7 @@ const planCurricularService = {
     if (!unidad) {
       throw ApiError.notFound("Unidad curricular no encontrada");
     }
-    if (unidad.planCurricular.curso.docenteId !== docenteId) {
-      throw ApiError.forbidden("No eres el propietario de esta unidad curricular");
-    }
+    await verificarDocenteCurso(unidad.planCurricular.curso.id, docenteId);
 
     const estado = datos.estado ?? "PENDIENTE";
     if (!ESTADOS_TEMA.includes(estado)) {
@@ -415,9 +397,7 @@ const planCurricularService = {
     if (!tema) {
       throw ApiError.notFound("Tema curricular no encontrado");
     }
-    if (tema.unidadCurricular.planCurricular.curso.docenteId !== docenteId) {
-      throw ApiError.forbidden("No eres el propietario de este tema curricular");
-    }
+    await verificarDocenteCurso(tema.unidadCurricular.planCurricular.curso.id, docenteId);
 
     const data = {};
     if (datos.titulo !== undefined) data.titulo = String(datos.titulo).trim();
@@ -448,9 +428,7 @@ const planCurricularService = {
     if (!tema) {
       throw ApiError.notFound("Tema curricular no encontrado");
     }
-    if (tema.unidadCurricular.planCurricular.curso.docenteId !== docenteId) {
-      throw ApiError.forbidden("No eres el propietario de este tema curricular");
-    }
+    await verificarDocenteCurso(tema.unidadCurricular.planCurricular.curso.id, docenteId);
 
     await prisma.temaCurricular.delete({ where: { id: temaId } });
     return { ok: true, mensaje: "Tema curricular eliminado" };
@@ -469,9 +447,7 @@ const planCurricularService = {
     if (!tema) {
       throw ApiError.notFound("Tema curricular no encontrado");
     }
-    if (tema.unidadCurricular.planCurricular.curso.docenteId !== docenteId) {
-      throw ApiError.forbidden("No eres el propietario de este tema curricular");
-    }
+    await verificarDocenteCurso(tema.unidadCurricular.planCurricular.curso.id, docenteId);
 
     const orden =
       datos.orden !== undefined
@@ -505,12 +481,10 @@ const planCurricularService = {
     if (!subtema) {
       throw ApiError.notFound("Subtema curricular no encontrado");
     }
-    if (
-      subtema.temaCurricular.unidadCurricular.planCurricular.curso.docenteId !==
-      docenteId
-    ) {
-      throw ApiError.forbidden("No eres el propietario de este subtema curricular");
-    }
+    await verificarDocenteCurso(
+      subtema.temaCurricular.unidadCurricular.planCurricular.curso.id,
+      docenteId,
+    );
 
     const data = {};
     if (datos.titulo !== undefined) data.titulo = String(datos.titulo).trim();
@@ -539,12 +513,10 @@ const planCurricularService = {
     if (!subtema) {
       throw ApiError.notFound("Subtema curricular no encontrado");
     }
-    if (
-      subtema.temaCurricular.unidadCurricular.planCurricular.curso.docenteId !==
-      docenteId
-    ) {
-      throw ApiError.forbidden("No eres el propietario de este subtema curricular");
-    }
+    await verificarDocenteCurso(
+      subtema.temaCurricular.unidadCurricular.planCurricular.curso.id,
+      docenteId,
+    );
 
     await prisma.subtemaCurricular.delete({ where: { id: subtemaId } });
     return { ok: true, mensaje: "Subtema curricular eliminado" };

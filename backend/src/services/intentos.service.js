@@ -1,8 +1,9 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const adaptiveLearningService = require("./adaptiveLearningService");
+const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
 
-const usuarioPublico = { id: true, nombres: true, correo: true };
+const usuarioPublico = { id: true, username: true, nombres: true, correo: true };
 
 // Normalización simple para comparar respuestas cortas:
 // minúsculas, sin acentos, sin espacios sobrantes.
@@ -48,10 +49,8 @@ const generarRetroalimentacion = (esCorrecta, pregunta, respondida) => {
 };
 
 const estaMatriculado = async (cursoId, estudianteId) => {
-  const matricula = await prisma.matricula.findUnique({
-    where: { estudianteId_cursoId: { estudianteId, cursoId } },
-  });
-  return Boolean(matricula);
+  await verificarEstudianteCurso(cursoId, estudianteId);
+  return true;
 };
 
 // Carga un intento verificando que pertenezca al estudiante autenticado.
@@ -425,9 +424,7 @@ const intentosService = {
         throw ApiError.forbidden("Este intento no te pertenece");
       }
     } else if (usuario.rol === "DOCENTE") {
-      if (intento.evaluacion.curso.docenteId !== usuario.id) {
-        throw ApiError.forbidden("No eres el propietario de este curso");
-      }
+      await verificarDocenteCurso(intento.evaluacion.curso.id, usuario.id);
     } else {
       throw ApiError.forbidden("Acceso denegado");
     }

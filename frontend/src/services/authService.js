@@ -12,20 +12,18 @@ const guardarSesion = (token, usuario) => {
 
 const authService = {
   // POST /api/auth/login -> { ok, token, usuario }
-  async login({ correo, contrasena }) {
-    const { data } = await api.post('/auth/login', { correo, contrasena })
+  async login({ username, contrasena }) {
+    const { data } = await api.post('/auth/login', { username, contrasena })
     guardarSesion(data.token, data.usuario)
     return data
   },
 
-  // POST /api/auth/registro -> { ok, usuario }
-  async registro({ nombres, correo, contrasena, rol }) {
-    const { data } = await api.post('/auth/registro', {
-      nombres,
-      correo,
-      contrasena,
-      rol,
+  async cambiarPassword({ contrasenaActual, nuevaContrasena }) {
+    const { data } = await api.post('/auth/cambiar-password', {
+      contrasenaActual,
+      nuevaContrasena,
     })
+    guardarSesion(data.token, data.usuario)
     return data
   },
 

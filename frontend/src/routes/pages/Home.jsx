@@ -76,8 +76,8 @@ function Home() {
           <Button variant="ghost" onClick={() => navigate('/login')}>
             Iniciar sesión
           </Button>
-          <Button variant="primary" onClick={() => navigate('/registro')}>
-            Crear cuenta
+          <Button variant="primary" onClick={() => navigate('/login')}>
+            Acceder
           </Button>
         </div>
       </header>
@@ -100,9 +100,9 @@ function Home() {
           <Button
             size="lg"
             variant="outline"
-            onClick={() => navigate('/registro')}
+            onClick={() => navigate('/login')}
           >
-            Crear cuenta
+            Acceder a mi cuenta
           </Button>
         </div>
       </section>
@@ -120,11 +120,11 @@ function Home() {
       <section className={styles.cta}>
         <h2 className={styles.ctaTitle}>Comienza a evaluar de forma inteligente</h2>
         <p className={styles.ctaText}>
-          Crea tu cuenta y descubre cómo la evaluación adaptativa mejora el
-          aprendizaje de tus estudiantes.
+          Solicita tu cuenta institucional al administrador y accede a las
+          herramientas de evaluación y seguimiento.
         </p>
-        <Button size="lg" variant="secondary" onClick={() => navigate('/registro')}>
-          Crear cuenta gratis
+        <Button size="lg" variant="secondary" onClick={() => navigate('/login')}>
+          Iniciar sesiÃ³n
         </Button>
       </section>
 

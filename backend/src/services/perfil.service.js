@@ -5,6 +5,7 @@ const progresoService = require("./progreso.service");
 const sanitizarPerfil = (usuario) => {
   const {
     contrasena,
+    sessionVersion,
     cursos,
     evaluaciones,
     matriculas,
@@ -17,18 +18,30 @@ const sanitizarPerfil = (usuario) => {
 
 const perfilService = {
   async obtenerEstadisticasDocente(docenteId) {
-    const [cursosCreados, evaluacionesPublicadas, matriculas] = await Promise.all([
-      prisma.curso.count({ where: { docenteId } }),
+    const [cursosCreados, evaluacionesPublicadas, asignaciones] = await Promise.all([
+      prisma.asignacionCurso.count({ where: { docenteId, estado: "ACTIVO" } }),
       prisma.evaluacion.count({
         where: { docenteId, estado: "PUBLICADA" },
       }),
-      prisma.matricula.findMany({
-        where: { curso: { docenteId } },
-        select: { estudianteId: true },
+      prisma.asignacionCurso.findMany({
+        where: { docenteId, estado: "ACTIVO" },
+        select: { seccionId: true, anioAcademicoId: true },
       }),
     ]);
 
-    const cantidadEstudiantes = new Set(matriculas.map((m) => m.estudianteId)).size;
+    const matriculas = asignaciones.length
+      ? await prisma.matriculaAcademica.findMany({
+          where: {
+            estado: "ACTIVO",
+            OR: asignaciones.map(({ seccionId, anioAcademicoId }) => ({
+              seccionId,
+              anioAcademicoId,
+            })),
+          },
+          select: { estudianteId: true },
+        })
+      : [];
+    const cantidadEstudiantes = new Set(matriculas.map((item) => item.estudianteId)).size;
 
     return {
       cursosCreados,
@@ -39,7 +52,9 @@ const perfilService = {
 
   async obtenerEstadisticasEstudiante(estudianteId) {
     const [cursosMatriculados, progreso] = await Promise.all([
-      prisma.matricula.count({ where: { estudianteId } }),
+      prisma.matriculaAcademica.count({
+        where: { estudianteId, estado: "ACTIVO" },
+      }),
       progresoService.obtenerMiProgreso(estudianteId),
     ]);
 
@@ -60,7 +75,9 @@ const perfilService = {
     const estadisticas =
       usuario.rol === "DOCENTE"
         ? await perfilService.obtenerEstadisticasDocente(usuario.id)
-        : await perfilService.obtenerEstadisticasEstudiante(usuario.id);
+        : usuario.rol === "ESTUDIANTE"
+          ? await perfilService.obtenerEstadisticasEstudiante(usuario.id)
+          : {};
 
     return {
       ...base,
@@ -89,9 +106,11 @@ const perfilService = {
       data.nombres = String(datos.nombres).trim();
     }
     if (datos.correo !== undefined) {
-      const correo = String(datos.correo).trim().toLowerCase();
+      const correo = String(datos.correo ?? "").trim().toLowerCase() || null;
       if (correo !== usuario.correo) {
-        const existente = await prisma.usuario.findUnique({ where: { correo } });
+        const existente = correo
+          ? await prisma.usuario.findUnique({ where: { correo } })
+          : null;
         if (existente && existente.id !== usuarioId) {
           throw ApiError.conflict("El correo ya está registrado");
         }
@@ -132,7 +151,7 @@ const perfilService = {
       return { esPropio: true, vistaLimitada: false };
     }
 
-    if (solicitante.rol === "ESTUDIANTE") {
+    if (solicitante.rol !== "DOCENTE") {
       throw ApiError.forbidden("No puedes consultar el perfil de otros usuarios");
     }
 
@@ -147,14 +166,26 @@ const perfilService = {
       );
     }
 
-    const matriculado = await prisma.matricula.findFirst({
-      where: {
-        estudianteId: objetivoId,
-        curso: { docenteId: solicitante.id },
-      },
+    const matriculas = await prisma.matriculaAcademica.findMany({
+      where: { estudianteId: objetivoId, estado: "ACTIVO" },
+      select: { seccionId: true, anioAcademicoId: true },
     });
 
-    if (!matriculado) {
+    const asignacion = matriculas.length
+      ? await prisma.asignacionCurso.findFirst({
+          where: {
+            docenteId: solicitante.id,
+            estado: "ACTIVO",
+            OR: matriculas.map(({ seccionId, anioAcademicoId }) => ({
+              seccionId,
+              anioAcademicoId,
+            })),
+          },
+          select: { id: true },
+        })
+      : null;
+
+    if (!asignacion) {
       throw ApiError.forbidden(
         "Este estudiante no está matriculado en ninguno de tus cursos",
       );
@@ -177,6 +208,7 @@ const perfilService = {
     // Vista docente: datos académicos y contacto básico, sin correo ni biografía completa si sensibles.
     const perfil = {
       id: usuario.id,
+      username: usuario.username,
       nombres: usuario.nombres,
       rol: usuario.rol,
       fotoPerfil: usuario.fotoPerfil,

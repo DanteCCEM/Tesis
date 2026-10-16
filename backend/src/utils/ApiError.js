@@ -1,9 +1,10 @@
 // Error operacional con código HTTP, para distinguir errores esperados
 // (validación, no encontrado, etc.) de errores inesperados del servidor.
 class ApiError extends Error {
-  constructor(statusCode, message) {
+  constructor(statusCode, message, code = null) {
     super(message);
     this.statusCode = statusCode;
+    this.code = code;
     this.name = "ApiError";
   }
 

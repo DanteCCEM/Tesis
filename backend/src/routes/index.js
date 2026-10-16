@@ -1,9 +1,12 @@
 const { Router } = require("express");
 
 const authRoutes = require("./auth.routes");
+const adminRoutes = require("./admin.routes");
+const estructuraAcademicaRoutes = require("./estructuraAcademica.routes");
+const authMiddleware = require("../middlewares/auth.middleware");
+const exigirPasswordActualizada = require("../middlewares/passwordChange.middleware");
 const usuariosRoutes = require("./usuarios.routes");
 const cursosRoutes = require("./cursos.routes");
-const matriculasRoutes = require("./matriculas.routes");
 const evaluacionesRoutes = require("./evaluaciones.routes");
 const preguntasRoutes = require("./preguntas.routes");
 const intentosRoutes = require("./intentos.routes");
@@ -31,9 +34,12 @@ router.get("/health", (req, res) => {
 
 // Recursos del dominio.
 router.use("/auth", authRoutes);
+router.use(authMiddleware);
+router.use(exigirPasswordActualizada);
+router.use("/admin", adminRoutes);
+router.use("/admin", estructuraAcademicaRoutes);
 router.use("/usuarios", usuariosRoutes);
 router.use("/cursos", cursosRoutes);
-router.use("/matriculas", matriculasRoutes);
 router.use("/evaluaciones", evaluacionesRoutes);
 router.use("/preguntas", preguntasRoutes);
 router.use("/intentos", intentosRoutes);

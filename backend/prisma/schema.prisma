@@ -15,8 +15,15 @@ datasource db {
 // ===================== ENUMS =====================
 
 enum Rol {
+  ADMIN
   DOCENTE
   ESTUDIANTE
+}
+
+enum EstadoUsuario {
+  ACTIVO
+  BLOQUEADO
+  INACTIVO
 }
 
 enum NivelDificultad {
@@ -65,30 +72,68 @@ enum EstadoTemaCurricular {
   COMPLETADO
 }
 
+enum EstadoAnioAcademico {
+  ACTIVO
+  CERRADO
+}
+
+enum EstadoRegistroAcademico {
+  ACTIVO
+  INACTIVO
+}
+
 // ===================== MODELOS =====================
 
 model Usuario {
-  id                   Int      @id @default(autoincrement())
+  id                   Int           @id @default(autoincrement())
+  username             String        @unique
   nombres              String
-  correo               String   @unique
+  correo               String?       @unique
   contrasena           String // almacenada cifrada (bcrypt)
   rol                  Rol
+  estado               EstadoUsuario @default(ACTIVO)
+  debeCambiarPassword  Boolean       @default(true)
+  sessionVersion       Int           @default(0)
+  ultimoAcceso         DateTime?
   fotoPerfil           String?
   telefono             String?
   institucionEducativa String?
   biografiaCorta       String?
-  createdAt            DateTime @default(now())
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   // Relaciones como DOCENTE
   cursos       Curso[]
   evaluaciones Evaluacion[]
 
   // Relaciones como ESTUDIANTE
-  matriculas            Matricula[]
-  intentos              IntentoEvaluacion[]
-  progresos             ProgresoEstudiante[]
-  practicasAdaptativas  PracticaAdaptativa[]
-  evaluacionesObjetivo  Evaluacion[]         @relation("PracticasObjetivo")
+  matriculas             Matricula[]
+  intentos               IntentoEvaluacion[]
+  progresos              ProgresoEstudiante[]
+  practicasAdaptativas   PracticaAdaptativa[]
+  evaluacionesObjetivo   Evaluacion[]         @relation("PracticasObjetivo")
+  auditoriasComoActor    Auditoria[]          @relation("AuditoriaActor")
+  auditoriasComoObjetivo Auditoria[]          @relation("AuditoriaObjetivo")
+  perfilDocente          PerfilDocente?
+  perfilEstudiante       PerfilEstudiante?
+  asignacionesDocente    AsignacionCurso[]
+  matriculasAcademicas   MatriculaAcademica[]
+}
+
+model Auditoria {
+  id                Int      @id @default(autoincrement())
+  usuarioActorId    Int
+  usuarioObjetivoId Int?
+  accion            String
+  datos             Json?
+  createdAt         DateTime @default(now())
+
+  usuarioActor    Usuario  @relation("AuditoriaActor", fields: [usuarioActorId], references: [id], onDelete: Restrict)
+  usuarioObjetivo Usuario? @relation("AuditoriaObjetivo", fields: [usuarioObjetivoId], references: [id], onDelete: SetNull)
+
+  @@index([usuarioActorId, createdAt])
+  @@index([usuarioObjetivoId, createdAt])
+  @@index([accion, createdAt])
 }
 
 model Curso {
@@ -99,6 +144,9 @@ model Curso {
   descripcion String?
   createdAt   DateTime @default(now())
 
+  asignacionCursoId Int?             @unique
+  asignacionCurso   AsignacionCurso? @relation(fields: [asignacionCursoId], references: [id], onDelete: SetNull)
+
   docenteId Int
   docente   Usuario @relation(fields: [docenteId], references: [id])
 
@@ -107,6 +155,122 @@ model Curso {
   progresos            ProgresoEstudiante[]
   practicasAdaptativas PracticaAdaptativa[]
   planesCurriculares   PlanCurricular[]
+}
+
+model AnioAcademico {
+  id          Int                 @id @default(autoincrement())
+  anio        Int                 @unique
+  estado      EstadoAnioAcademico @default(ACTIVO)
+  fechaInicio DateTime?
+  fechaFin    DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  asignaciones AsignacionCurso[]
+  matriculas   MatriculaAcademica[]
+}
+
+model Grado {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique
+  orden     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  secciones Seccion[]
+
+  @@index([orden])
+}
+
+model Seccion {
+  id        Int                     @id @default(autoincrement())
+  gradoId   Int
+  nombre    String
+  estado    EstadoRegistroAcademico @default(ACTIVO)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  grado     Grado                   @relation(fields: [gradoId], references: [id], onDelete: Restrict)
+
+  asignaciones AsignacionCurso[]
+  matriculas   MatriculaAcademica[]
+
+  @@unique([gradoId, nombre])
+}
+
+model AreaCurricular {
+  id          Int                     @id @default(autoincrement())
+  nombre      String                  @unique
+  descripcion String?
+  estado      EstadoRegistroAcademico @default(ACTIVO)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  asignaciones AsignacionCurso[]
+}
+
+model PerfilDocente {
+  id              Int      @id @default(autoincrement())
+  usuarioId       Int      @unique
+  dni             String   @unique
+  nombres         String
+  apellidoPaterno String
+  apellidoMaterno String
+  telefono        String?
+  especialidad    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model PerfilEstudiante {
+  id               Int       @id @default(autoincrement())
+  usuarioId        Int       @unique
+  codigoEstudiante String?   @unique
+  dni              String    @unique
+  nombres          String
+  apellidoPaterno  String
+  apellidoMaterno  String
+  telefono         String?
+  fechaNacimiento  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  usuario          Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model AsignacionCurso {
+  id               Int                     @id @default(autoincrement())
+  areaCurricularId Int
+  seccionId        Int
+  docenteId        Int
+  anioAcademicoId  Int
+  estado           EstadoRegistroAcademico @default(ACTIVO)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  areaCurricular   AreaCurricular          @relation(fields: [areaCurricularId], references: [id], onDelete: Restrict)
+  seccion          Seccion                 @relation(fields: [seccionId], references: [id], onDelete: Restrict)
+  docente          Usuario                 @relation(fields: [docenteId], references: [id], onDelete: Restrict)
+  anioAcademico    AnioAcademico           @relation(fields: [anioAcademicoId], references: [id], onDelete: Restrict)
+  cursoLegacy      Curso?
+
+  @@unique([areaCurricularId, seccionId, anioAcademicoId])
+  @@index([docenteId, anioAcademicoId])
+}
+
+model MatriculaAcademica {
+  id              Int                     @id @default(autoincrement())
+  estudianteId    Int
+  seccionId       Int
+  anioAcademicoId Int
+  estado          EstadoRegistroAcademico @default(ACTIVO)
+  fechaMatricula  DateTime                @default(now())
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  estudiante      Usuario                 @relation(fields: [estudianteId], references: [id], onDelete: Restrict)
+  seccion         Seccion                 @relation(fields: [seccionId], references: [id], onDelete: Restrict)
+  anioAcademico   AnioAcademico           @relation(fields: [anioAcademicoId], references: [id], onDelete: Restrict)
+
+  @@unique([estudianteId, anioAcademicoId])
+  @@index([seccionId, anioAcademicoId])
 }
 
 model Matricula {
@@ -123,18 +287,18 @@ model Matricula {
 }
 
 model Evaluacion {
-  id              Int              @id @default(autoincrement())
-  titulo          String
-  tema            String
-  subtema         String?
-  nivelDificultad NivelDificultad
-  fechaLimite     DateTime?
-  estado              EstadoEvaluacion @default(BORRADOR)
-  esPracticaAdaptativa Boolean         @default(false)
-  estudianteObjetivoId  Int?
-  temaCurricularId      Int?
-  subtemaCurricularId   Int?
-  createdAt             DateTime         @default(now())
+  id                   Int              @id @default(autoincrement())
+  titulo               String
+  tema                 String
+  subtema              String?
+  nivelDificultad      NivelDificultad
+  fechaLimite          DateTime?
+  estado               EstadoEvaluacion @default(BORRADOR)
+  esPracticaAdaptativa Boolean          @default(false)
+  estudianteObjetivoId Int?
+  temaCurricularId     Int?
+  subtemaCurricularId  Int?
+  createdAt            DateTime         @default(now())
 
   cursoId Int
   curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
@@ -142,9 +306,9 @@ model Evaluacion {
   docenteId Int
   docente   Usuario @relation(fields: [docenteId], references: [id])
 
-  estudianteObjetivo  Usuario?            @relation("PracticasObjetivo", fields: [estudianteObjetivoId], references: [id])
-  temaCurricular      TemaCurricular?     @relation(fields: [temaCurricularId], references: [id], onDelete: SetNull)
-  subtemaCurricular   SubtemaCurricular?  @relation(fields: [subtemaCurricularId], references: [id], onDelete: SetNull)
+  estudianteObjetivo Usuario?           @relation("PracticasObjetivo", fields: [estudianteObjetivoId], references: [id])
+  temaCurricular     TemaCurricular?    @relation(fields: [temaCurricularId], references: [id], onDelete: SetNull)
+  subtemaCurricular  SubtemaCurricular? @relation(fields: [subtemaCurricularId], references: [id], onDelete: SetNull)
 
   preguntas          Pregunta[]
   intentos           IntentoEvaluacion[]
@@ -152,13 +316,13 @@ model Evaluacion {
 }
 
 model Pregunta {
-  id               Int             @id @default(autoincrement())
-  enunciado        String
-  tipo             TipoPregunta
-  dificultad       NivelDificultad
-  tema             String
+  id                Int             @id @default(autoincrement())
+  enunciado         String
+  tipo              TipoPregunta
+  dificultad        NivelDificultad
+  tema              String
   respuestaCorrecta String?
-  puntaje          Float           @default(1)
+  puntaje           Float           @default(1)
 
   evaluacionId Int
   evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
@@ -179,13 +343,13 @@ model Alternativa {
 }
 
 model IntentoEvaluacion {
-  id            Int             @id @default(autoincrement())
-  fechaInicio   DateTime        @default(now())
-  fechaFin      DateTime?
-  puntajeTotal  Float           @default(0)
-  porcentaje    Float           @default(0)
-  nivelObtenido NivelDificultad?
-  estado        EstadoIntento   @default(EN_PROGRESO)
+  id                  Int              @id @default(autoincrement())
+  fechaInicio         DateTime         @default(now())
+  fechaFin            DateTime?
+  puntajeTotal        Float            @default(0)
+  porcentaje          Float            @default(0)
+  nivelObtenido       NivelDificultad?
+  estado              EstadoIntento    @default(EN_PROGRESO)
   retroalimentacionIA Json?
 
   estudianteId Int
@@ -200,10 +364,10 @@ model IntentoEvaluacion {
 }
 
 model RespuestaEstudiante {
-  id               Int      @id @default(autoincrement())
-  respuestaTexto   String?
-  esCorrecta       Boolean  @default(false)
-  puntajeObtenido  Float    @default(0)
+  id                Int     @id @default(autoincrement())
+  respuestaTexto    String?
+  esCorrecta        Boolean @default(false)
+  puntajeObtenido   Float   @default(0)
   retroalimentacion String?
 
   intentoId Int

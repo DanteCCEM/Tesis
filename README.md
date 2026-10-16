@@ -29,15 +29,14 @@ Desarrollar un sistema inteligente de evaluación educativa basado en inteligenc
 ## Usuarios del sistema
 
 ### Docente
-- Crear y gestionar cursos.
-- Visualizar estudiantes matriculados.
+- Visualizar las asignaciones académicas creadas por el administrador.
+- Visualizar los estudiantes matriculados en sus secciones.
 - Consultar notas, resultados y nivel de desempeño.
 - Crear y administrar evaluaciones.
 - Realizar seguimiento del progreso académico de los estudiantes.
-- Eliminar estudiantes de un curso cuando corresponda.
 
 ### Estudiante
-- Registrarse e iniciar sesión en la plataforma.
+- Iniciar sesión con una cuenta institucional creada por un administrador.
 - Visualizar los cursos en los que se encuentra matriculado.
 - Resolver evaluaciones asignadas.
 - Consultar sus notas, progreso y nivel de desempeño.
@@ -45,8 +44,10 @@ Desarrollar un sistema inteligente de evaluación educativa basado en inteligenc
 
 ## Funcionalidades implementadas
 
-- Registro e inicio de sesión de usuarios.
-- Diferenciación de roles entre docente y estudiante.
+- Inicio de sesión local mediante username y contraseña.
+- Cuentas institucionales administradas con roles ADMIN, DOCENTE y ESTUDIANTE.
+- Cambio obligatorio de contraseña en el primer acceso.
+- Estado de cuenta e invalidación de sesiones al restablecer contraseñas.
 - Gestión de cursos.
 - Visualización de cursos por usuario.
 - Módulo de evaluaciones.
@@ -74,6 +75,28 @@ Desarrollar un sistema inteligente de evaluación educativa basado en inteligenc
 - Gestión de variables de entorno: archivo `.env`
 - Control de versiones: Git y GitHub
 
+## Recuperación de cuentas institucionales
+
+Un administrador autenticado puede restablecer una cuenta mediante
+`POST /api/admin/usuarios/:id/restablecer-password`. La API genera una
+contraseña temporal, almacena solo su hash, invalida las sesiones anteriores y
+devuelve la contraseña una sola vez. El usuario debe cambiarla al iniciar sesión.
+
+Los cambios de contraseña y de estado quedan registrados en `Auditoria`. Al
+bloquear o inactivar una cuenta se invalidan sus sesiones. El sistema rechaza
+la operación si dejaría a la plataforma sin administradores activos.
+
+Para recuperar un administrador directamente desde el servidor:
+
+```bash
+cd backend
+npm run admin:reset -- nombre.usuario
+```
+
+El comando activa la cuenta indicada, genera una contraseña temporal, obliga a
+cambiarla en el siguiente acceso y registra el origen `EMERGENCY_CLI`. La
+contraseña se muestra una sola vez en la terminal y no se guarda en auditoría.
+
 ## Variables de investigación relacionadas
 
 Este sistema se desarrolla en relación con las siguientes variables de investigación:
@@ -88,7 +111,7 @@ Este sistema se desarrolla en relación con las siguientes variables de investig
 Sistema de Evaluación Educativa
 │
 ├── Frontend
-│   ├── Inicio de sesión y registro
+│   ├── Inicio de sesión y cambio de contraseña
 │   ├── Panel de docente
 │   ├── Panel de estudiante
 │   ├── Cursos
