@@ -388,20 +388,15 @@ const intentosService = {
       texto = String(respuestaTexto);
     }
 
-    const existente = await prisma.respuestaEstudiante.findFirst({
-      where: { intentoId, preguntaId: pregunta.id },
-    });
-
     const data = { respuestaTexto: texto, alternativaId: altId };
 
-    const respuesta = existente
-      ? await prisma.respuestaEstudiante.update({
-          where: { id: existente.id },
-          data,
-        })
-      : await prisma.respuestaEstudiante.create({
-          data: { intentoId, preguntaId: pregunta.id, ...data },
-        });
+    const respuesta = await prisma.respuestaEstudiante.upsert({
+      where: {
+        intentoId_preguntaId: { intentoId, preguntaId: pregunta.id },
+      },
+      update: data,
+      create: { intentoId, preguntaId: pregunta.id, ...data },
+    });
 
     // No se revela aún si es correcta (ocurre al finalizar).
     return {

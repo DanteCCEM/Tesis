@@ -1,0 +1,28 @@
+services:
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: evaluacion_ia_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d evaluacion_ia_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    depends_on:
+      db-test:
+        condition: service_healthy
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@db-test:5432/evaluacion_ia_test?schema=public
+      JWT_SECRET: evaluaia-test-secret
+      JWT_EXPIRES_IN: 1h
+      CORS_ORIGIN: http://localhost

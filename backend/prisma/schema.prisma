@@ -467,6 +467,8 @@ model RespuestaEstudiante {
 
   alternativaId Int?
   alternativa   Alternativa? @relation(fields: [alternativaId], references: [id])
+
+  @@unique([intentoId, preguntaId])
 }
 
 model ProgresoEstudiante {
