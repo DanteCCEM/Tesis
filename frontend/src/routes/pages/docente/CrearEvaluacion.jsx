@@ -218,6 +218,7 @@ function buildQuestionPayload(q, { tema, dificultadDefault }) {
     revisadaPorDocente: q.generatedByIA === true,
     fechaGeneracion: q.generationMeta?.fechaGeneracion,
     modeloGeneracion: q.generationMeta?.modelo,
+    nivelVariante: q.variantLevel || undefined,
   }
 
   if (q.type === 'short') {

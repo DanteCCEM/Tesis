@@ -469,7 +469,9 @@ function DocenteResultados() {
                     <tr>
                       <th>Estudiante</th>
                       <th>Nota</th>
+                      <th>Porcentaje</th>
                       <th>{compararPorVariante ? 'Variante rendida' : 'Nivel'}</th>
+                      <th>Nivel posterior</th>
                       <th>Recomendación</th>
                     </tr>
                   </thead>
@@ -483,6 +485,7 @@ function DocenteResultados() {
                           </div>
                         </td>
                         <td className={styles.scoreCell}>{est.nota}</td>
+                        <td>{Math.round(est.porcentaje ?? 0)}%</td>
                         <td>
                           <span
                             className={`${styles.levelBadge} ${getLevelClass(
@@ -496,6 +499,7 @@ function DocenteResultados() {
                               : NIVEL_LABEL[est.nivelObtenido] ?? '—'}
                           </span>
                         </td>
+                        <td>{NIVEL_LABEL[est.nivelPosterior] ?? '—'}</td>
                         <td className={styles.recommendation}>{est.recomendacion}</td>
                       </tr>
                     ))}

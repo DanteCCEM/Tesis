@@ -21,8 +21,10 @@ const normalizar = (texto) =>
     .replace(/\s+/g, " ");
 
 // Quita las respuestas correctas de una evaluación (vista de estudiante).
-const ocultarRespuestas = (evaluacion) => ({
-  ...evaluacion,
+const ocultarRespuestas = (evaluacion) => {
+  const { variantesEvaluacion, ...evaluacionVisible } = evaluacion;
+  return {
+  ...evaluacionVisible,
   preguntas: evaluacion.preguntas.map((pregunta) => {
     const { respuestaCorrecta, alternativas, ...resto } = pregunta;
     return {
@@ -33,7 +35,8 @@ const ocultarRespuestas = (evaluacion) => ({
       }),
     };
   }),
-});
+  };
+};
 
 // Retroalimentación inicial automática por pregunta.
 const generarRetroalimentacion = (esCorrecta, pregunta, respondida) => {
@@ -131,6 +134,15 @@ const construirResultado = (intento) => {
     nivelObtenido: intento.nivelObtenido,
     nivelAlRendir: intento.nivelAlRendir,
     dificultadVariante: intento.dificultadVariante,
+    nivelPosterior: intento.nivelObtenido,
+    variante: intento.varianteEvaluacion
+      ? {
+          id: intento.varianteEvaluacion.id,
+          nivelObjetivo: intento.varianteEvaluacion.nivelObjetivo,
+          cantidadPreguntas: intento.varianteEvaluacion.cantidadPreguntas,
+          dificultadPredominante: intento.varianteEvaluacion.dificultadPredominante,
+        }
+      : null,
     cantidadPreguntas: intento.cantidadPreguntas,
     especificacionAdaptativa: intento.especificacionAdaptativa,
     retroalimentacionIA: intento.retroalimentacionIA ?? null,
@@ -142,6 +154,14 @@ const construirResultado = (intento) => {
 
 // Includes reutilizables para construir un resultado completo.
 const includeResultado = {
+  varianteEvaluacion: {
+    select: {
+      id: true,
+      nivelObjetivo: true,
+      cantidadPreguntas: true,
+      dificultadPredominante: true,
+    },
+  },
   estudiante: { select: usuarioPublico },
   evaluacion: {
     include: {
@@ -200,6 +220,15 @@ const intentosService = {
           orderBy: { id: "asc" },
           include: { alternativas: { orderBy: { id: "asc" } } },
         },
+        variantesEvaluacion: {
+          where: { estado: { in: ["APROBADA", "PUBLICADA"] } },
+          include: {
+            preguntas: {
+              orderBy: { id: "asc" },
+              include: { alternativas: { orderBy: { id: "asc" } } },
+            },
+          },
+        },
       },
     });
 
@@ -227,7 +256,7 @@ const intentosService = {
           evaluacionId,
         },
       },
-      include: { respuestas: true },
+      include: { respuestas: true, varianteEvaluacion: true },
     });
 
     if (intento?.estado === "FINALIZADO") {
@@ -250,8 +279,9 @@ const intentosService = {
           cantidadPreguntas: especificacion.cantidadPreguntas,
           especificacionAdaptativa: especificacion,
           preguntasAsignadas: especificacion.preguntasIds,
+          varianteEvaluacionId: especificacion.varianteEvaluacionId ?? null,
         },
-        include: { respuestas: true },
+        include: { respuestas: true, varianteEvaluacion: true },
       });
 
       if (evaluacion.esPracticaAdaptativa) {
@@ -279,6 +309,14 @@ const intentosService = {
         evaluacionId: intento.evaluacionId,
         nivelAlRendir: intento.nivelAlRendir,
         dificultadVariante: intento.dificultadVariante,
+        nivelAlIniciar: intento.nivelAlRendir,
+        variante: intento.varianteEvaluacion
+          ? {
+              id: intento.varianteEvaluacion.id,
+              nivelObjetivo: intento.varianteEvaluacion.nivelObjetivo,
+              cantidadPreguntas: intento.varianteEvaluacion.cantidadPreguntas,
+            }
+          : null,
         cantidadPreguntas: intento.cantidadPreguntas,
         especificacionAdaptativa: intento.especificacionAdaptativa,
       },

@@ -105,18 +105,24 @@ const crearEspecificacion = async ({ evaluacion, estudianteId }) => {
     tema: evaluacion.tema,
   });
 
+  const varianteComun = evaluacion.variantesEvaluacion?.find(
+    (variante) => variante.nivelObjetivo === "COMUN",
+  );
+
   if (evaluacion.tipoEvaluacion !== "FORMATIVA_ADAPTATIVA") {
+    const preguntasComunes = varianteComun?.preguntas ?? evaluacion.preguntas;
     return {
       version: 1,
       adaptativa: false,
       nivelAlRendir: nivelActual,
       dificultadVariante: evaluacion.nivelDificultad,
-      cantidadPreguntas: evaluacion.preguntas.length,
-      preguntasIds: evaluacion.preguntas.map((pregunta) => pregunta.id),
+      varianteEvaluacionId: varianteComun?.id ?? null,
+      cantidadPreguntas: preguntasComunes.length,
+      preguntasIds: preguntasComunes.map((pregunta) => pregunta.id),
       distribucionReal: Object.fromEntries(
         NIVELES.map((nivel) => [
           nivel,
-          evaluacion.preguntas.filter((pregunta) => pregunta.dificultad === nivel).length,
+          preguntasComunes.filter((pregunta) => pregunta.dificultad === nivel).length,
         ]),
       ),
     };
@@ -126,8 +132,12 @@ const crearEspecificacion = async ({ evaluacion, estudianteId }) => {
     evaluacion.configuracionAdaptativa,
     nivelActual,
   );
+  const variante = evaluacion.variantesEvaluacion?.find(
+    (item) => item.nivelObjetivo === nivelActual,
+  );
+  const preguntasFuente = variante?.preguntas ?? evaluacion.preguntas;
   const { seleccionadas, distribucionReal } = seleccionarPreguntas({
-    preguntas: evaluacion.preguntas,
+    preguntas: preguntasFuente,
     distribucion: regla.distribucion,
     cantidad: regla.cantidadPreguntas,
     nivel: nivelActual,
@@ -138,6 +148,8 @@ const crearEspecificacion = async ({ evaluacion, estudianteId }) => {
     version: 1,
     adaptativa: true,
     configuracionVersion: configuracion.version,
+    varianteEvaluacionId: variante?.id ?? null,
+    nivelVariante: variante?.nivelObjetivo ?? nivelActual,
     nivelAlRendir: nivelActual,
     dificultadVariante: nivelActual,
     cantidadPreguntas: seleccionadas.length,

@@ -96,3 +96,44 @@ test("rechaza una variante cuando el banco total es insuficiente", () => {
     /requiere 3 preguntas/,
   );
 });
+
+test("usa las preguntas de la VarianteEvaluacion correspondiente al nivel", async () => {
+  const service = cargarServicio("INTERMEDIO");
+  const evaluacionConVariantes = {
+    ...evaluacion,
+    variantesEvaluacion: [
+      {
+        id: 701,
+        nivelObjetivo: "INTERMEDIO",
+        preguntas: banco.slice(0, 7),
+      },
+    ],
+  };
+
+  const especificacion = await service.crearEspecificacion({
+    evaluacion: evaluacionConVariantes,
+    estudianteId: 99,
+  });
+
+  assert.equal(especificacion.varianteEvaluacionId, 701);
+  assert.equal(especificacion.nivelVariante, "INTERMEDIO");
+  assert.equal(especificacion.preguntasIds.length, 7);
+  assert.deepEqual(especificacion.preguntasIds.sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7]);
+});
+
+test("las evaluaciones comunes seleccionan la variante COMUN", async () => {
+  const service = cargarServicio("AVANZADO");
+  const preguntasComunes = banco.slice(0, 3);
+  const especificacion = await service.crearEspecificacion({
+    evaluacion: {
+      ...evaluacion,
+      tipoEvaluacion: "DIAGNOSTICA",
+      variantesEvaluacion: [{ id: 702, nivelObjetivo: "COMUN", preguntas: preguntasComunes }],
+    },
+    estudianteId: 99,
+  });
+
+  assert.equal(especificacion.adaptativa, false);
+  assert.equal(especificacion.varianteEvaluacionId, 702);
+  assert.deepEqual(especificacion.preguntasIds, [1, 2, 3]);
+});

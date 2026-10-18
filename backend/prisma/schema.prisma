@@ -57,6 +57,20 @@ enum EstadoIntento {
   FINALIZADO
 }
 
+enum NivelVarianteEvaluacion {
+  COMUN
+  BASICO
+  INTERMEDIO
+  AVANZADO
+}
+
+enum EstadoVarianteEvaluacion {
+  BORRADOR
+  APROBADA
+  PUBLICADA
+  NO_DISPONIBLE
+}
+
 enum EstadoPracticaAdaptativa {
   PENDIENTE
   EN_CURSO
@@ -113,6 +127,7 @@ model Usuario {
   // Relaciones como DOCENTE
   cursos       Curso[]
   evaluaciones Evaluacion[]
+  variantesAprobadas VarianteEvaluacion[] @relation("VarianteAprobador")
 
   // Relaciones como ESTUDIANTE
   matriculas             Matricula[]
@@ -328,6 +343,7 @@ model Evaluacion {
   subtemaCurricular  SubtemaCurricular? @relation(fields: [subtemaCurricularId], references: [id], onDelete: SetNull)
 
   preguntas          Pregunta[]
+  variantesEvaluacion VarianteEvaluacion[]
   intentos           IntentoEvaluacion[]
   practicaAdaptativa PracticaAdaptativa?
   historialProgreso  HistorialProgreso[]
@@ -349,12 +365,36 @@ model Pregunta {
   modeloGeneracion  String?
   revisadaPorDocente Boolean        @default(false)
   fechaRevision     DateTime?
+  nivelVariante     NivelVarianteEvaluacion?
 
   evaluacionId Int
   evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
 
+  varianteEvaluacionId Int?
+  varianteEvaluacion   VarianteEvaluacion? @relation(fields: [varianteEvaluacionId], references: [id], onDelete: SetNull)
+
   alternativas Alternativa[]
   respuestas   RespuestaEstudiante[]
+}
+
+model VarianteEvaluacion {
+  id                    Int                     @id @default(autoincrement())
+  evaluacionId          Int
+  nivelObjetivo         NivelVarianteEvaluacion
+  cantidadPreguntas     Int
+  dificultadPredominante NivelDificultad?
+  estado                EstadoVarianteEvaluacion @default(BORRADOR)
+  fechaAprobacion       DateTime?
+  docenteAprobadorId    Int?
+  createdAt             DateTime                @default(now())
+
+  evaluacion            Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+  docenteAprobador      Usuario?   @relation("VarianteAprobador", fields: [docenteAprobadorId], references: [id], onDelete: SetNull)
+  preguntas             Pregunta[]
+  intentos              IntentoEvaluacion[]
+
+  @@unique([evaluacionId, nivelObjetivo])
+  @@index([evaluacionId, estado])
 }
 
 model Alternativa {
@@ -381,6 +421,7 @@ model IntentoEvaluacion {
   cantidadPreguntas   Int?
   especificacionAdaptativa Json?
   preguntasAsignadas  Json?
+  varianteEvaluacionId Int?
   estado              EstadoIntento    @default(EN_PROGRESO)
   retroalimentacionIA Json?
 
@@ -390,10 +431,13 @@ model IntentoEvaluacion {
   evaluacionId Int
   evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
 
+  varianteEvaluacion VarianteEvaluacion? @relation(fields: [varianteEvaluacionId], references: [id], onDelete: SetNull)
+
   respuestas         RespuestaEstudiante[]
   historialProgreso HistorialProgreso[]
 
   @@unique([estudianteId, evaluacionId])
+  @@index([varianteEvaluacionId])
 }
 
 model RespuestaEstudiante {

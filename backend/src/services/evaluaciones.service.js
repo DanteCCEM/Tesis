@@ -57,6 +57,96 @@ const ocultarRespuestas = (evaluacion) => ({
   }),
 });
 
+const nivelesVariantes = ["BASICO", "INTERMEDIO", "AVANZADO"];
+
+const dificultadPredominante = (preguntas) => {
+  const conteo = new Map(nivelesVariantes.map((nivel) => [nivel, 0]));
+  for (const pregunta of preguntas) {
+    if (conteo.has(pregunta.dificultad)) {
+      conteo.set(pregunta.dificultad, conteo.get(pregunta.dificultad) + 1);
+    }
+  }
+  return nivelesVariantes.reduce((mayor, nivel) =>
+    conteo.get(nivel) > conteo.get(mayor) ? nivel : mayor,
+  "BASICO");
+};
+
+const prepararVariantesPublicadas = async (tx, evaluacion, docenteId) => {
+  const preguntas = await tx.pregunta.findMany({
+    where: { evaluacionId: evaluacion.id },
+    orderBy: { id: "asc" },
+  });
+  const adaptativa = evaluacion.tipoEvaluacion === "FORMATIVA_ADAPTATIVA";
+  const grupos = new Map();
+
+  if (adaptativa) {
+    for (const nivel of nivelesVariantes) grupos.set(nivel, []);
+    for (const pregunta of preguntas) {
+      const nivel = pregunta.nivelVariante ?? pregunta.dificultad;
+      if (grupos.has(nivel)) grupos.get(nivel).push(pregunta);
+    }
+  } else {
+    grupos.set("COMUN", preguntas);
+  }
+
+  const configuracion = adaptativa
+    ? normalizarConfiguracionAdaptativa(evaluacion.configuracionAdaptativa)
+    : null;
+  const objetivos = adaptativa
+    ? nivelesVariantes.map((nivel) => ({
+        nivelObjetivo: nivel,
+        cantidadEsperada: configuracion.porNivel[nivel].cantidadPreguntas,
+      }))
+    : [{ nivelObjetivo: "COMUN", cantidadEsperada: preguntas.length }];
+
+  for (const objetivo of objetivos) {
+    const grupo = grupos.get(objetivo.nivelObjetivo) ?? [];
+    if (adaptativa && grupo.length < objetivo.cantidadEsperada) {
+      throw ApiError.conflict(
+        `La variante ${objetivo.nivelObjetivo} necesita ${objetivo.cantidadEsperada} preguntas y tiene ${grupo.length}`,
+      );
+    }
+  }
+
+  for (const objetivo of objetivos) {
+    const grupo = grupos.get(objetivo.nivelObjetivo) ?? [];
+    const variante = await tx.varianteEvaluacion.upsert({
+      where: {
+        evaluacionId_nivelObjetivo: {
+          evaluacionId: evaluacion.id,
+          nivelObjetivo: objetivo.nivelObjetivo,
+        },
+      },
+      create: {
+        evaluacionId: evaluacion.id,
+        nivelObjetivo: objetivo.nivelObjetivo,
+        cantidadPreguntas: objetivo.cantidadEsperada,
+        dificultadPredominante:
+          objetivo.nivelObjetivo === "COMUN"
+            ? dificultadPredominante(grupo)
+            : objetivo.nivelObjetivo,
+        estado: "PUBLICADA",
+        fechaAprobacion: new Date(),
+        docenteAprobadorId: docenteId,
+      },
+      update: {
+        cantidadPreguntas: objetivo.cantidadEsperada,
+        dificultadPredominante:
+          objetivo.nivelObjetivo === "COMUN"
+            ? dificultadPredominante(grupo)
+            : objetivo.nivelObjetivo,
+        estado: "PUBLICADA",
+        fechaAprobacion: new Date(),
+        docenteAprobadorId: docenteId,
+      },
+    });
+    await tx.pregunta.updateMany({
+      where: { evaluacionId: evaluacion.id, id: { in: grupo.map((p) => p.id) } },
+      data: { varianteEvaluacionId: variante.id },
+    });
+  }
+};
+
 const evaluacionesService = {
   // Crea una evaluación en un curso del docente autenticado.
   async crear(datos, docenteId) {
@@ -128,6 +218,7 @@ const evaluacionesService = {
       modeloGeneracion: generadaPorIA ? datos.modeloGeneracion ?? null : null,
       revisadaPorDocente,
       fechaRevision: revisadaPorDocente ? new Date() : null,
+      nivelVariante: datos.nivelVariante ?? null,
     };
 
     if (datos.tipo === "OPCION_MULTIPLE") {
@@ -386,9 +477,13 @@ const evaluacionesService = {
         );
       }
     }
-    return prisma.evaluacion.update({
-      where: { id: evaluacionId },
-      data: { estado: "PUBLICADA" },
+    return prisma.$transaction(async (tx) => {
+      await prepararVariantesPublicadas(tx, evaluacion, docenteId);
+      return tx.evaluacion.update({
+        where: { id: evaluacionId },
+        data: { estado: "PUBLICADA" },
+        include: { variantesEvaluacion: true },
+      });
     });
   },
 
@@ -434,6 +529,14 @@ const evaluacionesService = {
         where: { evaluacionId, estado: "FINALIZADO" },
         include: {
           estudiante: { select: { id: true, nombres: true, correo: true } },
+          varianteEvaluacion: {
+            select: {
+              id: true,
+              nivelObjetivo: true,
+              cantidadPreguntas: true,
+              dificultadPredominante: true,
+            },
+          },
           respuestas: {
             include: {
               pregunta: { select: { id: true, tema: true, enunciado: true } },
@@ -477,8 +580,17 @@ const evaluacionesService = {
         nota,
         nivelAlRendir: it.nivelAlRendir,
         dificultadVariante: it.dificultadVariante,
+        variante: it.varianteEvaluacion
+          ? {
+              id: it.varianteEvaluacion.id,
+              nivelObjetivo: it.varianteEvaluacion.nivelObjetivo,
+              cantidadPreguntas: it.varianteEvaluacion.cantidadPreguntas,
+              dificultadPredominante: it.varianteEvaluacion.dificultadPredominante,
+            }
+          : null,
         cantidadPreguntas: it.cantidadPreguntas,
         nivelObtenido: it.nivelObtenido,
+        nivelPosterior: it.nivelObtenido,
         aprobado: nota >= 11,
         recomendacion,
       };
