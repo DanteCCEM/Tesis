@@ -2,6 +2,12 @@ const ApiError = require("../utils/ApiError");
 
 const NIVELES = ["BASICO", "INTERMEDIO", "AVANZADO"];
 const ESTADOS = ["BORRADOR", "PUBLICADA", "CERRADA"];
+const TIPOS_EVALUACION = [
+  "REGULAR",
+  "DIAGNOSTICA",
+  "FORMATIVA_ADAPTATIVA",
+  "FINAL",
+];
 const TIPOS = ["OPCION_MULTIPLE", "VERDADERO_FALSO", "RESPUESTA_CORTA"];
 const VF_VALIDOS = ["true", "false", "verdadero", "falso", "v", "f"];
 
@@ -9,6 +15,49 @@ const esEnteroPositivo = (valor) =>
   Number.isInteger(Number(valor)) && Number(valor) > 0;
 
 const esFechaValida = (valor) => !Number.isNaN(new Date(valor).getTime());
+
+const validarConfiguracionAdaptativa = (configuracion, errores, requerida = false) => {
+  if (configuracion === undefined || configuracion === null) {
+    if (requerida) errores.push("configuracionAdaptativa es obligatoria");
+    return;
+  }
+  if (typeof configuracion !== "object" || Array.isArray(configuracion)) {
+    errores.push("configuracionAdaptativa debe ser un objeto JSON");
+    return;
+  }
+
+  if (
+    configuracion.criterios !== undefined &&
+    typeof configuracion.criterios !== "string"
+  ) {
+    errores.push("configuracionAdaptativa.criterios debe ser texto");
+  } else if (requerida && !String(configuracion.criterios ?? "").trim()) {
+    errores.push("configuracionAdaptativa.criterios es obligatorio");
+  }
+
+  if (requerida && configuracion.cantidadPorNivel === undefined) {
+    errores.push("configuracionAdaptativa.cantidadPorNivel es obligatoria");
+  } else if (configuracion.cantidadPorNivel !== undefined) {
+    const cantidades = configuracion.cantidadPorNivel;
+    if (!cantidades || typeof cantidades !== "object" || Array.isArray(cantidades)) {
+      errores.push("configuracionAdaptativa.cantidadPorNivel debe ser un objeto");
+    } else {
+      for (const nivel of NIVELES) {
+        const cantidad = cantidades[nivel];
+        if (requerida && cantidad === undefined) {
+          errores.push(`cantidadPorNivel.${nivel} es obligatoria`);
+          continue;
+        }
+        if (
+          cantidad !== undefined &&
+          (!Number.isInteger(Number(cantidad)) || Number(cantidad) < 1 || Number(cantidad) > 20)
+        ) {
+          errores.push(`cantidadPorNivel.${nivel} debe ser un entero entre 1 y 20`);
+        }
+      }
+    }
+  }
+};
 
 // POST /api/evaluaciones
 const validarCrearEvaluacion = (req, res, next) => {
@@ -22,6 +71,9 @@ const validarCrearEvaluacion = (req, res, next) => {
     fechaLimite,
     temaCurricularId,
     subtemaCurricularId,
+    tipoEvaluacion,
+    esAdaptativa,
+    configuracionAdaptativa,
   } = req.body ?? {};
   const nivel = dificultad ?? nivelDificultad;
   const errores = [];
@@ -54,6 +106,26 @@ const validarCrearEvaluacion = (req, res, next) => {
   if (subtemaCurricularId !== undefined && subtemaCurricularId !== null && !esEnteroPositivo(subtemaCurricularId)) {
     errores.push("subtemaCurricularId debe ser un entero válido");
   }
+  if (tipoEvaluacion !== undefined && !TIPOS_EVALUACION.includes(tipoEvaluacion)) {
+    errores.push(`tipoEvaluacion debe ser uno de: ${TIPOS_EVALUACION.join(", ")}`);
+  }
+  if (esAdaptativa !== undefined && typeof esAdaptativa !== "boolean") {
+    errores.push("esAdaptativa debe ser booleano");
+  }
+  if (["REGULAR", "DIAGNOSTICA", "FINAL"].includes(tipoEvaluacion) && esAdaptativa === true) {
+    errores.push(`${tipoEvaluacion} debe ser una evaluación común, no adaptativa`);
+  }
+  if (tipoEvaluacion === "FORMATIVA_ADAPTATIVA" && esAdaptativa === false) {
+    errores.push("FORMATIVA_ADAPTATIVA debe marcarse como adaptativa");
+  }
+  if (configuracionAdaptativa != null && tipoEvaluacion !== "FORMATIVA_ADAPTATIVA") {
+    errores.push("configuracionAdaptativa solo corresponde a FORMATIVA_ADAPTATIVA");
+  }
+  validarConfiguracionAdaptativa(
+    configuracionAdaptativa,
+    errores,
+    tipoEvaluacion === "FORMATIVA_ADAPTATIVA",
+  );
 
   if (errores.length > 0) {
     return next(ApiError.badRequest(errores.join("; ")));
@@ -72,6 +144,9 @@ const validarActualizarEvaluacion = (req, res, next) => {
     fechaLimite,
     temaCurricularId,
     subtemaCurricularId,
+    tipoEvaluacion,
+    esAdaptativa,
+    configuracionAdaptativa,
   } = req.body ?? {};
   const nivel = dificultad ?? nivelDificultad;
   const errores = [];
@@ -101,6 +176,30 @@ const validarActualizarEvaluacion = (req, res, next) => {
   if (subtemaCurricularId !== undefined && subtemaCurricularId !== null && !esEnteroPositivo(subtemaCurricularId)) {
     errores.push("subtemaCurricularId debe ser un entero válido");
   }
+  if (tipoEvaluacion !== undefined && !TIPOS_EVALUACION.includes(tipoEvaluacion)) {
+    errores.push(`tipoEvaluacion debe ser uno de: ${TIPOS_EVALUACION.join(", ")}`);
+  }
+  if (esAdaptativa !== undefined && typeof esAdaptativa !== "boolean") {
+    errores.push("esAdaptativa debe ser booleano");
+  }
+  if (["REGULAR", "DIAGNOSTICA", "FINAL"].includes(tipoEvaluacion) && esAdaptativa === true) {
+    errores.push(`${tipoEvaluacion} debe ser una evaluación común, no adaptativa`);
+  }
+  if (tipoEvaluacion === "FORMATIVA_ADAPTATIVA" && esAdaptativa === false) {
+    errores.push("FORMATIVA_ADAPTATIVA debe marcarse como adaptativa");
+  }
+  if (
+    configuracionAdaptativa != null &&
+    tipoEvaluacion !== undefined &&
+    tipoEvaluacion !== "FORMATIVA_ADAPTATIVA"
+  ) {
+    errores.push("configuracionAdaptativa solo corresponde a FORMATIVA_ADAPTATIVA");
+  }
+  validarConfiguracionAdaptativa(
+    configuracionAdaptativa,
+    errores,
+    tipoEvaluacion === "FORMATIVA_ADAPTATIVA",
+  );
 
   if (errores.length > 0) {
     return next(ApiError.badRequest(errores.join("; ")));

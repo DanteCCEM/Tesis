@@ -13,6 +13,24 @@ const DIFFICULTIES = [
   { value: 'AVANZADO', label: 'Avanzado' },
 ]
 
+const EVALUATION_TYPES = [
+  {
+    value: 'DIAGNOSTICA',
+    label: 'Diagnóstica (pretest)',
+    description: 'Es común para toda la asignación y establece el nivel inicial por tema.',
+  },
+  {
+    value: 'FORMATIVA_ADAPTATIVA',
+    label: 'Formativa adaptativa',
+    description: 'Guarda criterios y cantidades por nivel para la futura asignación personalizada.',
+  },
+  {
+    value: 'FINAL',
+    label: 'Final (postest)',
+    description: 'Es común o equivalente para todos y no se adapta automáticamente.',
+  },
+]
+
 const QUESTION_TYPES = [
   { value: 'multiple', label: 'Opción múltiple', backend: 'OPCION_MULTIPLE' },
   { value: 'truefalse', label: 'Verdadero / Falso', backend: 'VERDADERO_FALSO' },
@@ -24,6 +42,7 @@ const BACKEND_TYPES = QUESTION_TYPES.map((t) => t.backend)
 const EMPTY_FORM = {
   course: '',
   title: '',
+  evaluationType: 'DIAGNOSTICA',
   topicMode: 'plan',
   unidadId: '',
   temaCurricularId: '',
@@ -35,6 +54,10 @@ const EMPTY_FORM = {
   tiposPregunta: ['OPCION_MULTIPLE'],
   type: 'multiple',
   deadline: '',
+  adaptiveCriteria: '',
+  adaptiveBasicAmount: 5,
+  adaptiveIntermediateAmount: 7,
+  adaptiveAdvancedAmount: 10,
 }
 
 function elegirPlanCurricular(planes = []) {
@@ -310,6 +333,10 @@ function CrearEvaluacion() {
   )
 
   const subtemasDisponibles = temaSeleccionado?.subtemas ?? []
+  const evaluationType = EVALUATION_TYPES.find(
+    (item) => item.value === form.evaluationType,
+  )
+  const isAdaptive = form.evaluationType === 'FORMATIVA_ADAPTATIVA'
 
   const handleChange = (field) => (event) => {
     const value = event.target.value
@@ -415,6 +442,21 @@ function CrearEvaluacion() {
     const amount = Number(form.amount)
     if (!amount || amount < 1) next.amount = 'Indica una cantidad válida (mínimo 1).'
     if (amount > 20) next.amount = 'El máximo permitido es 20 preguntas.'
+    if (isAdaptive) {
+      if (!form.adaptiveCriteria.trim()) {
+        next.adaptiveCriteria = 'Define los criterios de adaptación.'
+      }
+      for (const field of [
+        'adaptiveBasicAmount',
+        'adaptiveIntermediateAmount',
+        'adaptiveAdvancedAmount',
+      ]) {
+        const cantidad = Number(form[field])
+        if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 20) {
+          next[field] = 'Usa un entero entre 1 y 20.'
+        }
+      }
+    }
     return next
   }
 
@@ -576,6 +618,21 @@ function CrearEvaluacion() {
         dificultad,
         fechaLimite: form.deadline || undefined,
         estado: 'BORRADOR',
+        tipoEvaluacion: form.evaluationType,
+        esAdaptativa: isAdaptive,
+        ...(isAdaptive
+          ? {
+              configuracionAdaptativa: {
+                criterios: form.adaptiveCriteria.trim(),
+                cantidadPorNivel: {
+                  BASICO: Number(form.adaptiveBasicAmount),
+                  INTERMEDIO: Number(form.adaptiveIntermediateAmount),
+                  AVANZADO: Number(form.adaptiveAdvancedAmount),
+                },
+                version: 1,
+              },
+            }
+          : {}),
         ...(form.topicMode === 'plan' && form.temaCurricularId
           ? {
               temaCurricularId: Number(form.temaCurricularId),
@@ -699,6 +756,40 @@ function CrearEvaluacion() {
                   disabled={generatingIA}
                 />
                 {errors.title && <span className={styles.errorText}>{errors.title}</span>}
+              </div>
+
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <label className={styles.label} htmlFor="evaluationType">
+                  Tipo de evaluación
+                </label>
+                <select
+                  id="evaluationType"
+                  className={styles.select}
+                  value={form.evaluationType}
+                  onChange={handleChange('evaluationType')}
+                  disabled={generatingIA}
+                >
+                  {EVALUATION_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  className={`${styles.evaluationTypeInfo} ${
+                    isAdaptive ? styles.evaluationTypeAdaptive : ''
+                  }`}
+                  role="note"
+                >
+                  <strong>{isAdaptive ? 'Flujo adaptativo' : 'Evaluación común'}</strong>
+                  <span>{evaluationType?.description}</span>
+                  {isAdaptive && (
+                    <small>
+                      En esta etapa se guarda la configuración. La selección personalizada de
+                      preguntas por estudiante se implementará en la siguiente fase.
+                    </small>
+                  )}
+                </div>
               </div>
 
               <div className={`${styles.field} ${styles.fieldFull}`}>
@@ -984,6 +1075,53 @@ function CrearEvaluacion() {
                   disabled={generatingIA}
                 />
               </div>
+
+              {isAdaptive && (
+                <div className={`${styles.field} ${styles.fieldFull}`}>
+                  <div className={styles.adaptiveConfig}>
+                    <div className={styles.field}>
+                      <label className={styles.label} htmlFor="adaptiveCriteria">
+                        Criterios de adaptación
+                      </label>
+                      <textarea
+                        id="adaptiveCriteria"
+                        className={`${styles.textarea} ${
+                          errors.adaptiveCriteria ? styles.inputError : ''
+                        }`}
+                        value={form.adaptiveCriteria}
+                        onChange={handleChange('adaptiveCriteria')}
+                        placeholder="Ej. Nivel previo por tema y porcentaje de dominio del último intento."
+                        disabled={generatingIA}
+                      />
+                      {errors.adaptiveCriteria && (
+                        <span className={styles.errorText}>{errors.adaptiveCriteria}</span>
+                      )}
+                    </div>
+                    <div className={styles.adaptiveAmounts}>
+                      {[
+                        ['adaptiveBasicAmount', 'Nivel básico'],
+                        ['adaptiveIntermediateAmount', 'Nivel intermedio'],
+                        ['adaptiveAdvancedAmount', 'Nivel avanzado'],
+                      ].map(([field, label]) => (
+                        <div className={styles.field} key={field}>
+                          <label className={styles.label} htmlFor={field}>{label}</label>
+                          <input
+                            id={field}
+                            type="number"
+                            min="1"
+                            max="20"
+                            className={`${styles.input} ${errors[field] ? styles.inputError : ''}`}
+                            value={form[field]}
+                            onChange={handleChange(field)}
+                            disabled={generatingIA}
+                          />
+                          {errors[field] && <span className={styles.errorText}>{errors[field]}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className={styles.draftActions}>

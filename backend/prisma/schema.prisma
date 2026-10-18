@@ -38,6 +38,14 @@ enum EstadoEvaluacion {
   CERRADA
 }
 
+enum TipoEvaluacion {
+  REGULAR
+  DIAGNOSTICA
+  FORMATIVA_ADAPTATIVA
+  FINAL
+  PRACTICA_ADAPTATIVA
+}
+
 enum TipoPregunta {
   OPCION_MULTIPLE
   VERDADERO_FALSO
@@ -168,6 +176,7 @@ model AnioAcademico {
 
   asignaciones AsignacionCurso[]
   matriculas   MatriculaAcademica[]
+  evaluaciones Evaluacion[]
 }
 
 model Grado {
@@ -294,11 +303,15 @@ model Evaluacion {
   nivelDificultad      NivelDificultad
   fechaLimite          DateTime?
   estado               EstadoEvaluacion @default(BORRADOR)
-  esPracticaAdaptativa Boolean          @default(false)
-  estudianteObjetivoId Int?
-  temaCurricularId     Int?
-  subtemaCurricularId  Int?
-  createdAt            DateTime         @default(now())
+  tipoEvaluacion         TipoEvaluacion    @default(REGULAR)
+  esAdaptativa           Boolean           @default(false)
+  configuracionAdaptativa Json?
+  esPracticaAdaptativa   Boolean           @default(false)
+  estudianteObjetivoId   Int?
+  anioAcademicoId        Int?
+  temaCurricularId       Int?
+  subtemaCurricularId    Int?
+  createdAt              DateTime          @default(now())
 
   cursoId Int
   curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
@@ -307,12 +320,16 @@ model Evaluacion {
   docente   Usuario @relation(fields: [docenteId], references: [id])
 
   estudianteObjetivo Usuario?           @relation("PracticasObjetivo", fields: [estudianteObjetivoId], references: [id])
+  anioAcademico      AnioAcademico?     @relation(fields: [anioAcademicoId], references: [id], onDelete: SetNull)
   temaCurricular     TemaCurricular?    @relation(fields: [temaCurricularId], references: [id], onDelete: SetNull)
   subtemaCurricular  SubtemaCurricular? @relation(fields: [subtemaCurricularId], references: [id], onDelete: SetNull)
 
   preguntas          Pregunta[]
   intentos           IntentoEvaluacion[]
   practicaAdaptativa PracticaAdaptativa?
+
+  @@index([cursoId, tipoEvaluacion])
+  @@index([anioAcademicoId, tipoEvaluacion])
 }
 
 model Pregunta {

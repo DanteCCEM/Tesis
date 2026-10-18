@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { Prisma } = require("../generated/prisma");
 const ApiError = require("../utils/ApiError");
 const planCurricularService = require("./planCurricular.service");
 const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
@@ -32,6 +33,28 @@ const normalizarVerdaderoFalso = (valor) => {
   return ["true", "verdadero", "v"].includes(v) ? "VERDADERO" : "FALSO";
 };
 
+const tiposAdaptativos = new Set([
+  "FORMATIVA_ADAPTATIVA",
+  "PRACTICA_ADAPTATIVA",
+]);
+
+const normalizarConfiguracionAdaptativa = (configuracion) => {
+  if (configuracion == null) return null;
+  const resultado = { ...configuracion };
+  if (typeof resultado.criterios === "string") {
+    resultado.criterios = resultado.criterios.trim();
+  }
+  if (resultado.cantidadPorNivel) {
+    resultado.cantidadPorNivel = Object.fromEntries(
+      Object.entries(resultado.cantidadPorNivel).map(([nivel, cantidad]) => [
+        nivel,
+        Number(cantidad),
+      ]),
+    );
+  }
+  return resultado;
+};
+
 // Quita las respuestas correctas de una evaluación (vista de estudiante).
 const ocultarRespuestas = (evaluacion) => ({
   ...evaluacion,
@@ -51,9 +74,12 @@ const evaluacionesService = {
   // Crea una evaluación en un curso del docente autenticado.
   async crear(datos, docenteId) {
     const cursoId = Number(datos.cursoId);
-    await verificarCursoPropio(cursoId, docenteId);
+    const curso = await verificarCursoPropio(cursoId, docenteId);
 
     const nivel = datos.dificultad ?? datos.nivelDificultad;
+    // REGULAR mantiene compatibles clientes anteriores. La UI nueva envía el tipo explícito.
+    const tipoEvaluacion = datos.tipoEvaluacion ?? "REGULAR";
+    const esAdaptativa = tiposAdaptativos.has(tipoEvaluacion);
 
     const refs = await planCurricularService.validarReferenciasEvaluacion(
       cursoId,
@@ -69,6 +95,19 @@ const evaluacionesService = {
         nivelDificultad: nivel,
         fechaLimite: datos.fechaLimite ? new Date(datos.fechaLimite) : null,
         estado: datos.estado ?? "BORRADOR",
+        tipoEvaluacion,
+        esAdaptativa,
+        ...(esAdaptativa && datos.configuracionAdaptativa != null
+          ? {
+              configuracionAdaptativa: normalizarConfiguracionAdaptativa(
+                datos.configuracionAdaptativa,
+              ),
+            }
+          : {}),
+        anioAcademicoId: curso.asignacionCurso?.anioAcademicoId ?? null,
+        // Diagnósticas, finales y formativas pertenecen a toda la asignación.
+        esPracticaAdaptativa: false,
+        estudianteObjetivoId: null,
         cursoId,
         docenteId,
         temaCurricularId: refs.temaCurricularId,
@@ -260,6 +299,32 @@ const evaluacionesService = {
     if (datos.estado !== undefined) data.estado = datos.estado;
     if (datos.fechaLimite !== undefined) {
       data.fechaLimite = datos.fechaLimite ? new Date(datos.fechaLimite) : null;
+    }
+
+    const tipoEvaluacion = datos.tipoEvaluacion ?? evaluacion.tipoEvaluacion;
+    if (datos.tipoEvaluacion !== undefined) data.tipoEvaluacion = tipoEvaluacion;
+    if (
+      datos.tipoEvaluacion !== undefined ||
+      datos.esAdaptativa !== undefined
+    ) {
+      data.esAdaptativa = tiposAdaptativos.has(tipoEvaluacion);
+    }
+    if (datos.configuracionAdaptativa !== undefined) {
+      if (tiposAdaptativos.has(tipoEvaluacion) && datos.configuracionAdaptativa == null) {
+        throw ApiError.badRequest(
+          "Una evaluación adaptativa requiere configuracionAdaptativa",
+        );
+      }
+      data.configuracionAdaptativa = tiposAdaptativos.has(tipoEvaluacion)
+        ? normalizarConfiguracionAdaptativa(datos.configuracionAdaptativa)
+        : Prisma.DbNull;
+    } else if (!tiposAdaptativos.has(tipoEvaluacion) && datos.tipoEvaluacion !== undefined) {
+      data.configuracionAdaptativa = Prisma.DbNull;
+    }
+
+    if (["DIAGNOSTICA", "FORMATIVA_ADAPTATIVA", "FINAL"].includes(tipoEvaluacion)) {
+      data.esPracticaAdaptativa = false;
+      data.estudianteObjetivoId = null;
     }
 
     if (

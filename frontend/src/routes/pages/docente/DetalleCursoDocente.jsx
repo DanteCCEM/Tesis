@@ -4,6 +4,14 @@ import { Button, Card, PageHeader } from '../../../components/index.js'
 import cursosService from '../../../services/cursosService.js'
 import styles from './DetalleCursoDocente.module.css'
 
+const TIPO_EVALUACION_LABEL = {
+  REGULAR: 'Regular (histórica)',
+  DIAGNOSTICA: 'Diagnóstica',
+  FORMATIVA_ADAPTATIVA: 'Formativa adaptativa',
+  FINAL: 'Final',
+  PRACTICA_ADAPTATIVA: 'Práctica adaptativa',
+}
+
 function getInitials(nombre) {
   return nombre
     .split(' ')
@@ -273,6 +281,7 @@ function DetalleCursoDocente() {
                 <thead>
                   <tr>
                     <th>Título</th>
+                    <th>Tipo</th>
                     <th>Estado</th>
                     <th>Preguntas</th>
                   </tr>
@@ -286,6 +295,7 @@ function DetalleCursoDocente() {
                           {ev.tema}
                         </div>
                       </td>
+                      <td>{TIPO_EVALUACION_LABEL[ev.tipoEvaluacion] ?? 'Regular'}</td>
                       <td>
                         <span
                           className={`${styles.badge} ${getEstadoClass(ev.estado)}`}

@@ -218,7 +218,8 @@ const cursosService = {
       estudiantes,
       evaluaciones: curso.evaluaciones.map((ev) => ({
         id: ev.id, titulo: ev.titulo, tema: ev.tema, estado: ev.estado,
-        estadoLabel: ESTADO_LABEL[ev.estado], nivelDificultad: ev.nivelDificultad,
+        estadoLabel: ESTADO_LABEL[ev.estado], tipoEvaluacion: ev.tipoEvaluacion,
+        esAdaptativa: ev.esAdaptativa, nivelDificultad: ev.nivelDificultad,
         fechaLimite: ev.fechaLimite, totalPreguntas: ev._count.preguntas, createdAt: ev.createdAt,
       })),
       rendimiento,

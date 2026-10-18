@@ -117,6 +117,8 @@ const construirResultado = (intento) => {
       titulo: intento.evaluacion.titulo,
       tema: intento.evaluacion.tema,
       subtema: intento.evaluacion.subtema,
+      tipoEvaluacion: intento.evaluacion.tipoEvaluacion,
+      esAdaptativa: intento.evaluacion.esAdaptativa,
     },
     estudiante: intento.estudiante,
     nota: intento.puntajeTotal,
@@ -391,8 +393,8 @@ const intentosService = {
       return resultado;
     }
 
-    // Aprendizaje adaptativo: determina nivel/recomendaciones y persiste
-    // el progreso del estudiante por tema.
+    // La diagnóstica establece el perfil inicial; las formativas y finales lo
+    // mantienen actualizado. Las prácticas individuales no alteran este perfil.
     const adaptativo = await adaptiveLearningService.procesarIntento({
       estudianteId: intentoFinal.estudianteId,
       cursoId: intentoFinal.evaluacion.cursoId,
