@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, PageHeader } from '../../../components/index.js'
 import cursosService from '../../../services/cursosService.js'
 import evaluacionesService from '../../../services/evaluacionesService.js'
+import intentosService from '../../../services/intentosService.js'
 import styles from './Resultados.module.css'
 
 const NIVEL_LABEL = {
@@ -48,6 +49,9 @@ function DocenteResultados() {
   const [analitica, setAnalitica] = useState(null)
   const [loadingAnalitica, setLoadingAnalitica] = useState(false)
   const [analiticaError, setAnaliticaError] = useState('')
+  const [revision, setRevision] = useState(null)
+  const [revisionError, setRevisionError] = useState('')
+  const [savingRevision, setSavingRevision] = useState(false)
 
   const fetchCourses = () => {
     setLoading(true)
@@ -99,6 +103,28 @@ function DocenteResultados() {
     setAnalitica(null)
     setAnaliticaError('')
     setLoadingAnalitica(Boolean(value))
+  }
+
+  const guardarRevision = async (estudiante) => {
+    setSavingRevision(true)
+    setRevisionError('')
+    try {
+      const resultado = await intentosService.modificarCalificacion(estudiante.intentoId, {
+        notaFinal: Number(revision.notaFinal),
+        motivoModificacion: revision.motivo,
+      })
+      setAnalitica((actual) => actual ? {
+        ...actual,
+        estudiantes: actual.estudiantes.map((item) => item.intentoId === estudiante.intentoId
+          ? { ...item, nota: resultado.notaFinal, notaFinal: resultado.notaFinal, modificadaPorDocente: true }
+          : item),
+      } : actual)
+      setRevision(null)
+    } catch (err) {
+      setRevisionError(err.mensaje || 'No se pudo modificar la calificación.')
+    } finally {
+      setSavingRevision(false)
+    }
   }
 
   useEffect(() => {
@@ -477,6 +503,7 @@ function DocenteResultados() {
                   </thead>
                   <tbody>
                     {analitica.estudiantes.map((est) => (
+                      <Fragment key={est.intentoId}>
                       <tr key={est.intentoId}>
                         <td>
                           <div className={styles.studentCell}>
@@ -484,7 +511,7 @@ function DocenteResultados() {
                             {est.nombres}
                           </div>
                         </td>
-                        <td className={styles.scoreCell}>{est.nota}</td>
+                        <td className={styles.scoreCell}>{est.nota}{est.modificadaPorDocente && <small> · revisada</small>}<br /><Button variant="ghost" size="sm" onClick={() => { setRevisionError(''); setRevision({ intentoId: est.intentoId, notaFinal: est.notaFinal ?? est.nota, motivo: '' }) }}>Revisar</Button></td>
                         <td>{Math.round(est.porcentaje ?? 0)}%</td>
                         <td>
                           <span
@@ -502,6 +529,20 @@ function DocenteResultados() {
                         <td>{NIVEL_LABEL[est.nivelPosterior] ?? '—'}</td>
                         <td className={styles.recommendation}>{est.recomendacion}</td>
                       </tr>
+                      {revision?.intentoId === est.intentoId && (
+                        <tr key={`${est.intentoId}-revision`}>
+                          <td colSpan="6">
+                            <div className={styles.revisionBox}>
+                              <label>Nota final <input type="number" min="0" max="20" step="0.1" value={revision.notaFinal} onChange={(event) => setRevision({ ...revision, notaFinal: event.target.value })} /></label>
+                              <label>Motivo <input value={revision.motivo} onChange={(event) => setRevision({ ...revision, motivo: event.target.value })} placeholder="Motivo pedagógico obligatorio" /></label>
+                              {revisionError && <span>{revisionError}</span>}
+                              <Button size="sm" disabled={savingRevision || !revision.motivo.trim()} onClick={() => guardarRevision(est)}>{savingRevision ? 'Guardando…' : 'Guardar revisión'}</Button>
+                              <Button variant="ghost" size="sm" onClick={() => setRevision(null)}>Cancelar</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

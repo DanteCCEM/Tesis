@@ -32,4 +32,15 @@ const validarRespuesta = (req, res, next) => {
   next();
 };
 
-module.exports = { validarRespuesta };
+const validarModificacionCalificacion = (req, res, next) => {
+  const nota = Number(req.body?.notaFinal);
+  const motivo = String(req.body?.motivoModificacion ?? "").trim();
+  const errores = [];
+  if (!Number.isFinite(nota) || nota < 0 || nota > 20) errores.push("notaFinal debe estar entre 0 y 20");
+  if (!motivo) errores.push("motivoModificacion es obligatorio");
+  if (motivo.length > 500) errores.push("motivoModificacion no puede superar 500 caracteres");
+  if (errores.length) return next(ApiError.badRequest(errores.join("; ")));
+  next();
+};
+
+module.exports = { validarRespuesta, validarModificacionCalificacion };

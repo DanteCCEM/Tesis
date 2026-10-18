@@ -293,7 +293,7 @@ const adminUsuariosService = {
       prisma.intentoEvaluacion.findMany({
         where: { estudianteId: id, estado: "FINALIZADO" },
         select: {
-          id: true, puntajeTotal: true, porcentaje: true, nivelObtenido: true, fechaFin: true,
+          id: true, puntajeTotal: true, porcentaje: true, nota: true, notaAutomatica: true, notaFinal: true, modificadaPorDocente: true, fechaModificacion: true, nivelObtenido: true, fechaFin: true,
           evaluacion: { select: { id: true, titulo: true, tema: true, curso: { select: { id: true, nombre: true } } } },
         },
         orderBy: { fechaFin: "desc" },

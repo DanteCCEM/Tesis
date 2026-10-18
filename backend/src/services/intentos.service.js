@@ -130,6 +130,15 @@ const construirResultado = (intento) => {
     },
     estudiante: intento.estudiante,
     nota: intento.nota,
+    puntajeAutomatico: intento.puntajeAutomatico ?? intento.puntajeTotal,
+    porcentajeAutomatico: intento.porcentajeAutomatico ?? intento.porcentaje,
+    notaAutomatica: intento.notaAutomatica ?? intento.nota,
+    notaFinal: intento.notaFinal ?? intento.nota,
+    modificadaPorDocente: intento.modificadaPorDocente === true,
+    fechaModificacion: intento.fechaModificacion,
+    revisionDocente: intento.modificadaPorDocente === true
+      ? { realizada: true }
+      : { realizada: false },
     porcentaje: intento.porcentaje,
     nivelObtenido: intento.nivelObtenido,
     nivelAlRendir: intento.nivelAlRendir,
@@ -497,6 +506,10 @@ const intentosService = {
           puntajeTotal,
           porcentaje,
           nota,
+          puntajeAutomatico: puntajeTotal,
+          porcentajeAutomatico: porcentaje,
+          notaAutomatica: nota,
+          notaFinal: nota,
           nivelObtenido,
           cantidadPreguntas: evaluacion.preguntas.length,
         },
@@ -525,6 +538,68 @@ const intentosService = {
     const adaptativo = await registrarProgresoFinalizado(intentoFinal);
 
     return { ...resultado, adaptativo };
+  },
+
+  async modificarCalificacion(intentoId, docente, { notaFinal, motivoModificacion }) {
+    const nota = Number(notaFinal);
+    const motivo = String(motivoModificacion ?? "").trim();
+    if (!Number.isFinite(nota) || nota < 0 || nota > 20) {
+      throw ApiError.badRequest("notaFinal debe estar entre 0 y 20");
+    }
+    if (!motivo) throw ApiError.badRequest("Toda modificación requiere un motivo");
+
+    const intento = await prisma.intentoEvaluacion.findUnique({
+      where: { id: intentoId },
+      include: {
+        evaluacion: { include: { curso: true } },
+      },
+    });
+    if (!intento) throw ApiError.notFound("Intento no encontrado");
+    if (intento.estado !== "FINALIZADO") {
+      throw ApiError.badRequest("Solo se pueden revisar intentos finalizados");
+    }
+    await verificarDocenteCurso(intento.evaluacion.cursoId, docente.id);
+    if (intento.evaluacion.estado === "CERRADA") {
+      throw ApiError.conflict("No se puede modificar una calificación de una evaluación cerrada");
+    }
+
+    const notaAnterior = intento.notaFinal ?? intento.notaAutomatica ?? intento.nota;
+    const actualizado = await prisma.$transaction(async (tx) => {
+      const resultado = await tx.intentoEvaluacion.update({
+        where: { id: intentoId },
+        data: {
+          notaFinal: nota,
+          nota: nota,
+          modificadaPorDocente: true,
+          docenteIdModificacion: docente.id,
+          motivoModificacion: motivo,
+          fechaModificacion: new Date(),
+        },
+      });
+      await tx.auditoria.create({
+        data: {
+          usuarioActorId: docente.id,
+          usuarioObjetivoId: intento.estudianteId,
+          accion: "GRADE_CHANGED",
+          datos: {
+            intentoId,
+            evaluacionId: intento.evaluacionId,
+            notaAnterior,
+            notaNueva: nota,
+            docente: docente.id,
+            motivo,
+            fecha: new Date().toISOString(),
+          },
+        },
+      });
+      return resultado;
+    });
+
+    const completo = await prisma.intentoEvaluacion.findUnique({
+      where: { id: actualizado.id },
+      include: includeResultado,
+    });
+    return construirResultado(completo);
   },
 
   // Devuelve el resultado completo de un intento. Accesible para el estudiante

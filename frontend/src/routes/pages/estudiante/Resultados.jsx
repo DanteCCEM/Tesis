@@ -197,7 +197,7 @@ function EstudianteResultados() {
     const total = detalles.length
     const incorrect = total - correct
     const percentage = Math.round(resultado.porcentaje ?? 0)
-    const score20 = Math.round((resultado.porcentaje ?? 0) / 5)
+    const score20 = resultado.notaFinal ?? resultado.nota ?? Math.round((resultado.porcentaje ?? 0) / 5)
 
     return {
       total,
@@ -206,6 +206,9 @@ function EstudianteResultados() {
       percentage,
       score20,
       puntaje: resultado.nota ?? 0,
+      notaAutomatica: resultado.notaAutomatica ?? resultado.nota,
+      notaFinal: resultado.notaFinal ?? resultado.nota,
+      modificadaPorDocente: resultado.modificadaPorDocente === true,
       mastered: resultado.temasCorrectos ?? [],
       toReinforce: resultado.temasPorReforzar ?? [],
       levelLabel: NIVEL_LABEL[resultado.nivelObtenido] ?? 'Nivel',
@@ -307,6 +310,7 @@ function EstudianteResultados() {
             </p>
             <span className={styles.levelTag}>{data.levelLabel}</span>
             {data.variantLabel && <p>{data.variantLabel}</p>}
+            {data.modificadaPorDocente && <p>Calificación revisada por tu docente.</p>}
           </div>
         </div>
 

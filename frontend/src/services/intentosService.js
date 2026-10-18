@@ -18,6 +18,11 @@ const intentosService = {
     const { data } = await api.post(`/intentos/${intentoId}/finalizar`)
     return data.resultado
   },
+
+  async modificarCalificacion(intentoId, payload) {
+    const { data } = await api.patch(`/intentos/${intentoId}/calificacion`, payload)
+    return data.resultado
+  },
 }
 
 export default intentosService

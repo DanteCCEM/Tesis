@@ -578,6 +578,11 @@ const evaluacionesService = {
         nombres: it.estudiante.nombres,
         porcentaje: redondear(it.porcentaje),
         nota,
+        notaAutomatica: it.notaAutomatica ?? it.nota,
+        notaFinal: it.notaFinal ?? it.nota,
+        modificadaPorDocente: it.modificadaPorDocente === true,
+        motivoModificacion: it.motivoModificacion,
+        fechaModificacion: it.fechaModificacion,
         nivelAlRendir: it.nivelAlRendir,
         dificultadVariante: it.dificultadVariante,
         variante: it.varianteEvaluacion

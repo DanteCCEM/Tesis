@@ -29,6 +29,16 @@ const intentosController = {
     res.status(200).json({ ok: true, resultado });
   }),
 
+  modificarCalificacion: asyncHandler(async (req, res) => {
+    const intentoId = parseId(req.params.intentoId, "id del intento");
+    const resultado = await intentosService.modificarCalificacion(
+      intentoId,
+      req.usuario,
+      req.body,
+    );
+    res.status(200).json({ ok: true, resultado });
+  }),
+
   // GET /api/intentos/:intentoId/resultados (estudiante dueño o docente del curso)
   resultados: asyncHandler(async (req, res) => {
     const intentoId = parseId(req.params.intentoId, "id del intento");

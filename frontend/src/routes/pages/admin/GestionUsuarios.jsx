@@ -328,7 +328,7 @@ function GestionUsuarios({ tipo }) {
           <div className={styles.detailList}>{detalle.map((item) => <article key={item.id}><strong>{item.areaCurricular.nombre}</strong><span>{item.seccion.grado.nombre} {item.seccion.nombre} · {item.anioAcademico.anio} · {item.estado}</span></article>)}{!detalle.length && <p>Sin asignaciones académicas.</p>}</div>
         ) : (
           <div className={styles.detailList}>
-            <h3>Calificaciones</h3>{detalle.intentos.map((item) => <article key={item.id}><strong>{item.evaluacion.titulo} · {item.puntajeTotal}/20</strong><span>{item.evaluacion.curso.nombre} · {item.porcentaje}% · {item.nivelObtenido || 'Sin nivel'}</span></article>)}{!detalle.intentos.length && <p>Sin evaluaciones finalizadas.</p>}
+            <h3>Calificaciones</h3>{detalle.intentos.map((item) => <article key={item.id}><strong>{item.evaluacion.titulo} · Nota final: {item.notaFinal ?? item.nota ?? '—'}</strong><span>{item.evaluacion.curso.nombre} · {item.porcentaje}% · {item.nivelObtenido || 'Sin nivel'}{item.modificadaPorDocente ? ' · Revisada por docente' : ''}</span></article>)}{!detalle.intentos.length && <p>Sin evaluaciones finalizadas.</p>}
             <h3>Progreso</h3>{detalle.progresos.map((item) => <article key={item.id}><strong>{item.tema} · {item.porcentajeDominio}%</strong><span>{item.curso.nombre} · {item.nivelActual}</span></article>)}{!detalle.progresos.length && <p>Sin registros de progreso.</p>}
           </div>
         )}

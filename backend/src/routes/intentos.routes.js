@@ -2,7 +2,7 @@ const { Router } = require("express");
 const intentosController = require("../controllers/intentos.controller");
 const authMiddleware = require("../middlewares/auth.middleware");
 const autorizarRoles = require("../middlewares/role.middleware");
-const { validarRespuesta } = require("../validators/intentos.validator");
+const { validarRespuesta, validarModificacionCalificacion } = require("../validators/intentos.validator");
 
 const router = Router();
 
@@ -15,6 +15,13 @@ router.post(
   autorizarRoles("ESTUDIANTE"),
   validarRespuesta,
   intentosController.guardarRespuesta,
+);
+
+router.patch(
+  "/:intentoId/calificacion",
+  autorizarRoles("DOCENTE"),
+  validarModificacionCalificacion,
+  intentosController.modificarCalificacion,
 );
 
 // Finalizar y corregir el intento (solo ESTUDIANTE dueño del intento).

@@ -128,6 +128,7 @@ model Usuario {
   cursos       Curso[]
   evaluaciones Evaluacion[]
   variantesAprobadas VarianteEvaluacion[] @relation("VarianteAprobador")
+  calificacionesModificadas IntentoEvaluacion[] @relation("CalificacionModificada")
 
   // Relaciones como ESTUDIANTE
   matriculas             Matricula[]
@@ -415,6 +416,14 @@ model IntentoEvaluacion {
   puntajeTotal        Float            @default(0)
   porcentaje          Float            @default(0)
   nota                Float            @default(0)
+  puntajeAutomatico   Float            @default(0)
+  porcentajeAutomatico Float           @default(0)
+  notaAutomatica      Float            @default(0)
+  notaFinal           Float            @default(0)
+  modificadaPorDocente Boolean         @default(false)
+  docenteIdModificacion Int?
+  motivoModificacion  String?
+  fechaModificacion   DateTime?
   nivelObtenido       NivelDificultad?
   nivelAlRendir       NivelDificultad?
   dificultadVariante  NivelDificultad?
@@ -430,6 +439,8 @@ model IntentoEvaluacion {
 
   evaluacionId Int
   evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+
+  docenteModificacion Usuario? @relation("CalificacionModificada", fields: [docenteIdModificacion], references: [id], onDelete: SetNull)
 
   varianteEvaluacion VarianteEvaluacion? @relation(fields: [varianteEvaluacionId], references: [id], onDelete: SetNull)
 
