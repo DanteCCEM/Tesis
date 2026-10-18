@@ -1,6 +1,9 @@
 const prisma = require("../config/prisma");
 const { Prisma } = require("../generated/prisma");
 const { porcentajeANota20 } = require("../config/learningRules");
+const {
+  normalizarConfiguracionAdaptativa,
+} = require("../config/adaptiveEvaluationRules");
 const ApiError = require("../utils/ApiError");
 const planCurricularService = require("./planCurricular.service");
 const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
@@ -38,23 +41,6 @@ const tiposAdaptativos = new Set([
   "FORMATIVA_ADAPTATIVA",
   "PRACTICA_ADAPTATIVA",
 ]);
-
-const normalizarConfiguracionAdaptativa = (configuracion) => {
-  if (configuracion == null) return null;
-  const resultado = { ...configuracion };
-  if (typeof resultado.criterios === "string") {
-    resultado.criterios = resultado.criterios.trim();
-  }
-  if (resultado.cantidadPorNivel) {
-    resultado.cantidadPorNivel = Object.fromEntries(
-      Object.entries(resultado.cantidadPorNivel).map(([nivel, cantidad]) => [
-        nivel,
-        Number(cantidad),
-      ]),
-    );
-  }
-  return resultado;
-};
 
 // Quita las respuestas correctas de una evaluación (vista de estudiante).
 const ocultarRespuestas = (evaluacion) => ({
@@ -355,7 +341,25 @@ const evaluacionesService = {
 
   // Publica una evaluación propia.
   async publicar(evaluacionId, docenteId) {
-    await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    if (evaluacion.tipoEvaluacion === "FORMATIVA_ADAPTATIVA") {
+      const configuracion = normalizarConfiguracionAdaptativa(
+        evaluacion.configuracionAdaptativa,
+      );
+      const cantidadMaxima = Math.max(
+        ...Object.values(configuracion.porNivel).map(
+          (regla) => regla.cantidadPreguntas,
+        ),
+      );
+      const cantidadBanco = await prisma.pregunta.count({
+        where: { evaluacionId },
+      });
+      if (cantidadBanco < cantidadMaxima) {
+        throw ApiError.conflict(
+          `El banco necesita al menos ${cantidadMaxima} preguntas para cubrir todas las variantes adaptativas; actualmente tiene ${cantidadBanco}`,
+        );
+      }
+    }
     return prisma.evaluacion.update({
       where: { id: evaluacionId },
       data: { estado: "PUBLICADA" },
@@ -445,6 +449,9 @@ const evaluacionesService = {
         nombres: it.estudiante.nombres,
         porcentaje: redondear(it.porcentaje),
         nota,
+        nivelAlRendir: it.nivelAlRendir,
+        dificultadVariante: it.dificultadVariante,
+        cantidadPreguntas: it.cantidadPreguntas,
         nivelObtenido: it.nivelObtenido,
         aprobado: nota >= 11,
         recomendacion,
@@ -457,6 +464,44 @@ const evaluacionesService = {
       intentosFinalizados > 0
         ? redondear((aprobados / intentosFinalizados) * 100)
         : 0;
+    const esFormativaAdaptativa =
+      evaluacion.tipoEvaluacion === "FORMATIVA_ADAPTATIVA";
+    if (esFormativaAdaptativa) {
+      const ordenNivel = { BASICO: 0, INTERMEDIO: 1, AVANZADO: 2 };
+      estudiantes.sort(
+        (a, b) =>
+          (ordenNivel[a.nivelAlRendir] ?? 0) -
+            (ordenNivel[b.nivelAlRendir] ?? 0) ||
+          b.porcentaje - a.porcentaje,
+      );
+    }
+    const variantes = new Map();
+    for (const intento of intentos) {
+      const nivel = intento.nivelAlRendir ?? "BASICO";
+      const dificultad = intento.dificultadVariante ?? evaluacion.nivelDificultad;
+      const clave = `${nivel}:${dificultad}`;
+      const actual = variantes.get(clave) || {
+        nivelAlRendir: nivel,
+        dificultadVariante: dificultad,
+        intentos: 0,
+        sumaPorcentaje: 0,
+        sumaNota: 0,
+        cantidadesPreguntas: new Set(),
+      };
+      actual.intentos += 1;
+      actual.sumaPorcentaje += intento.porcentaje;
+      actual.sumaNota += intento.nota ?? porcentajeANota20(intento.porcentaje);
+      actual.cantidadesPreguntas.add(intento.cantidadPreguntas);
+      variantes.set(clave, actual);
+    }
+    const resultadosPorVariante = [...variantes.values()].map((variante) => ({
+      nivelAlRendir: variante.nivelAlRendir,
+      dificultadVariante: variante.dificultadVariante,
+      intentos: variante.intentos,
+      cantidadesPreguntas: [...variante.cantidadesPreguntas].filter(Boolean),
+      promedioPorcentaje: redondear(variante.sumaPorcentaje / variante.intentos),
+      promedioNota: redondear(variante.sumaNota / variante.intentos),
+    }));
 
     const preguntaStats = new Map();
     for (const pregunta of evaluacion.preguntas) {
@@ -527,20 +572,27 @@ const evaluacionesService = {
         titulo: evaluacion.titulo,
         tema: evaluacion.tema,
         estado: evaluacion.estado,
+        tipoEvaluacion: evaluacion.tipoEvaluacion,
         nivelDificultad: evaluacion.nivelDificultad,
         totalPreguntas: evaluacion.preguntas.length,
         curso: evaluacion.curso,
       },
       resumen: {
+        comparabilidad: esFormativaAdaptativa ? "POR_VARIANTE" : "DIRECTA",
         estudiantesMatriculados,
         intentosFinalizados,
         pendientes: Math.max(0, estudiantesMatriculados - intentosFinalizados),
-        promedioPorcentaje,
-        promedioNota: porcentajeANota20(promedioPorcentaje),
-        aprobados,
-        reprobados,
-        porcentajeAprobacion,
-        estudiantesPorReforzar: reprobados,
+        promedioPorcentaje: esFormativaAdaptativa ? null : promedioPorcentaje,
+        promedioNota: esFormativaAdaptativa
+          ? null
+          : porcentajeANota20(promedioPorcentaje),
+        aprobados: esFormativaAdaptativa ? null : aprobados,
+        reprobados: esFormativaAdaptativa ? null : reprobados,
+        porcentajeAprobacion: esFormativaAdaptativa
+          ? null
+          : porcentajeAprobacion,
+        estudiantesPorReforzar: esFormativaAdaptativa ? null : reprobados,
+        resultadosPorVariante,
       },
       preguntasConMasErrores,
       temasConMasErrores,

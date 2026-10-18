@@ -80,7 +80,15 @@ const estudiantesSeccion = async (asignacion) => {
 const statsEstudiante = async (estudiante, cursoId) => {
   const [intentos, progresos] = await Promise.all([
     prisma.intentoEvaluacion.findMany({
-      where: { estudianteId: estudiante.id, estado: "FINALIZADO", evaluacion: { cursoId, esPracticaAdaptativa: false } },
+      where: {
+        estudianteId: estudiante.id,
+        estado: "FINALIZADO",
+        evaluacion: {
+          cursoId,
+          esPracticaAdaptativa: false,
+          tipoEvaluacion: { not: "FORMATIVA_ADAPTATIVA" },
+        },
+      },
       orderBy: { fechaFin: "desc" },
       include: { evaluacion: { select: { titulo: true } } },
     }),
@@ -123,7 +131,14 @@ const statsEstudiante = async (estudiante, cursoId) => {
 
 const rendimientoCurso = async (cursoId) => {
   const intentos = await prisma.intentoEvaluacion.findMany({
-    where: { estado: "FINALIZADO", evaluacion: { cursoId } },
+    where: {
+      estado: "FINALIZADO",
+      evaluacion: {
+        cursoId,
+        esPracticaAdaptativa: false,
+        tipoEvaluacion: { not: "FORMATIVA_ADAPTATIVA" },
+      },
+    },
     include: {
       estudiante: { select: { id: true, nombres: true } },
       respuestas: { include: { pregunta: { select: { tema: true } } } },

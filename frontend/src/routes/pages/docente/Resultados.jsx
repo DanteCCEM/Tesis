@@ -198,6 +198,7 @@ function DocenteResultados() {
 
   const resumen = analitica?.resumen
   const porcentajeAprobacion = resumen?.porcentajeAprobacion ?? 0
+  const compararPorVariante = resumen?.comparabilidad === 'POR_VARIANTE'
 
   return (
     <>
@@ -316,8 +317,29 @@ function DocenteResultados() {
         </div>
       ) : (
         <>
+          {compararPorVariante && (
+            <Card
+              title="Resultados por variante adaptativa"
+              subtitle="Las notas de variantes básicas, intermedias y avanzadas se muestran por separado."
+            >
+              <div className={styles.statsGrid}>
+                {(resumen?.resultadosPorVariante ?? []).map((variante) => (
+                  <div
+                    className={styles.statCard}
+                    key={`${variante.nivelAlRendir}-${variante.dificultadVariante}`}
+                  >
+                    <span className={styles.statValue}>{variante.promedioNota}</span>
+                    <span className={styles.statLabel}>
+                      {variante.nivelAlRendir} · {variante.intentos} intento(s) ·{' '}
+                      {variante.cantidadesPreguntas.join('/')} preguntas
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           <div className={styles.overview}>
-            <div className={styles.donutCard}>
+            {!compararPorVariante && <div className={styles.donutCard}>
               <div
                 className={styles.donut}
                 style={{
@@ -339,30 +361,34 @@ function DocenteResultados() {
                   Reprobados ({resumen?.reprobados ?? 0})
                 </span>
               </div>
-            </div>
+            </div>}
 
             <div className={styles.statsGrid}>
-              <div className={styles.statCard}>
-                <span className={styles.statValue}>{resumen?.promedioNota ?? 0}</span>
-                <span className={styles.statLabel}>Promedio del aula (0–20)</span>
-              </div>
+              {!compararPorVariante && (
+                <div className={styles.statCard}>
+                  <span className={styles.statValue}>{resumen?.promedioNota ?? 0}</span>
+                  <span className={styles.statLabel}>Promedio del aula (0–20)</span>
+                </div>
+              )}
               <div className={styles.statCard}>
                 <span className={styles.statValue}>{resumen?.intentosFinalizados ?? 0}</span>
                 <span className={styles.statLabel}>Intentos finalizados</span>
               </div>
-              <div className={styles.statCard}>
+              {!compararPorVariante && <div className={styles.statCard}>
                 <span className={`${styles.statValue} ${styles.statApproved}`}>
                   {resumen?.aprobados ?? 0}
                 </span>
                 <span className={styles.statLabel}>Estudiantes aprobados</span>
-              </div>
-              <div className={styles.statCard}>
-                <span className={`${styles.statValue} ${styles.statFailed}`}>
-                  {resumen?.reprobados ?? 0}
-                </span>
-                <span className={styles.statLabel}>Estudiantes reprobados</span>
-              </div>
-              {(resumen?.estudiantesPorReforzar ?? 0) > 0 && (
+              </div>}
+              {!compararPorVariante && (
+                <div className={styles.statCard}>
+                  <span className={`${styles.statValue} ${styles.statFailed}`}>
+                    {resumen?.reprobados ?? 0}
+                  </span>
+                  <span className={styles.statLabel}>Estudiantes reprobados</span>
+                </div>
+              )}
+              {!compararPorVariante && (resumen?.estudiantesPorReforzar ?? 0) > 0 && (
                 <div className={styles.reinforceCard}>
                   <span className={styles.reinforceIcon}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -443,7 +469,7 @@ function DocenteResultados() {
                     <tr>
                       <th>Estudiante</th>
                       <th>Nota</th>
-                      <th>Nivel</th>
+                      <th>{compararPorVariante ? 'Variante rendida' : 'Nivel'}</th>
                       <th>Recomendación</th>
                     </tr>
                   </thead>
@@ -459,9 +485,15 @@ function DocenteResultados() {
                         <td className={styles.scoreCell}>{est.nota}</td>
                         <td>
                           <span
-                            className={`${styles.levelBadge} ${getLevelClass(est.nivelObtenido)}`}
+                            className={`${styles.levelBadge} ${getLevelClass(
+                              compararPorVariante
+                                ? est.dificultadVariante
+                                : est.nivelObtenido,
+                            )}`}
                           >
-                            {NIVEL_LABEL[est.nivelObtenido] ?? '—'}
+                            {compararPorVariante
+                              ? `${NIVEL_LABEL[est.nivelAlRendir] ?? '—'} · ${est.cantidadPreguntas ?? '—'} preguntas`
+                              : NIVEL_LABEL[est.nivelObtenido] ?? '—'}
                           </span>
                         </td>
                         <td className={styles.recommendation}>{est.recomendacion}</td>

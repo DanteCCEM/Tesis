@@ -400,7 +400,13 @@ const progresoService = {
       orderBy: { fechaFin: "asc" },
       include: {
         evaluacion: {
-          select: { id: true, titulo: true, tema: true, cursoId: true },
+          select: {
+            id: true,
+            titulo: true,
+            tema: true,
+            cursoId: true,
+            tipoEvaluacion: true,
+          },
         },
       },
     });
@@ -428,12 +434,17 @@ const progresoService = {
         })
       : [];
 
+    // Las variantes adaptativas tienen exigencias distintas. Se conservan en
+    // el historial, pero no se promedian entre sí ni con evaluaciones comunes.
+    const intentosComparables = intentos.filter(
+      (it) => it.evaluacion.tipoEvaluacion !== "FORMATIVA_ADAPTATIVA",
+    );
     const evaluacionesRealizadas = intentos.length;
     const promedioPorcentaje =
-      evaluacionesRealizadas > 0
+      intentosComparables.length > 0
         ? redondear(
-            intentos.reduce((acc, it) => acc + it.porcentaje, 0) /
-              evaluacionesRealizadas,
+            intentosComparables.reduce((acc, it) => acc + it.porcentaje, 0) /
+              intentosComparables.length,
           )
         : 0;
     const promedioNota = aNota20(promedioPorcentaje);
@@ -457,12 +468,16 @@ const progresoService = {
         recomendaciones: p.recomendaciones,
       }));
 
-    const evolucion = intentos.map((it, index) => ({
+    const evolucion = intentosComparables.map((it, index) => ({
       label: `Eval. ${index + 1}`,
       titulo: it.evaluacion.titulo,
       porcentaje: redondear(it.porcentaje),
       nota: aNota20(it.porcentaje),
       fecha: it.fechaFin,
+      tipoEvaluacion: it.evaluacion.tipoEvaluacion,
+      nivelAlRendir: it.nivelAlRendir,
+      dificultadVariante: it.dificultadVariante,
+      cantidadPreguntas: it.cantidadPreguntas,
     }));
 
     const historial = [...intentos]
@@ -477,9 +492,40 @@ const progresoService = {
           porcentaje: redondear(it.porcentaje),
           nota,
           nivelObtenido: it.nivelObtenido,
-          aprobado: nota >= 11,
+          nivelAlRendir: it.nivelAlRendir,
+          dificultadVariante: it.dificultadVariante,
+          cantidadPreguntas: it.cantidadPreguntas,
+          tipoEvaluacion: it.evaluacion.tipoEvaluacion,
+          aprobado:
+            it.evaluacion.tipoEvaluacion === "FORMATIVA_ADAPTATIVA"
+              ? null
+              : nota >= 11,
         };
       });
+
+    const variantes = new Map();
+    for (const intento of intentos.filter(
+      (it) => it.evaluacion.tipoEvaluacion === "FORMATIVA_ADAPTATIVA",
+    )) {
+      const clave = `${intento.nivelAlRendir ?? "BASICO"}:${intento.dificultadVariante ?? "BASICO"}:${intento.cantidadPreguntas ?? 0}`;
+      const actual = variantes.get(clave) ?? {
+        nivelAlRendir: intento.nivelAlRendir ?? "BASICO",
+        dificultadVariante: intento.dificultadVariante ?? "BASICO",
+        cantidadPreguntas: intento.cantidadPreguntas ?? 0,
+        intentos: 0,
+        sumaPorcentaje: 0,
+      };
+      actual.intentos += 1;
+      actual.sumaPorcentaje += intento.porcentaje;
+      variantes.set(clave, actual);
+    }
+    const resultadosAdaptativosPorVariante = [...variantes.values()].map(
+      ({ sumaPorcentaje, ...variante }) => ({
+        ...variante,
+        promedioPorcentaje: redondear(sumaPorcentaje / variante.intentos),
+        promedioNota: aNota20(sumaPorcentaje / variante.intentos),
+      }),
+    );
 
     const recomendacionDetalle = construirRecomendacion(nivel, {
       temasPorReforzar: temasPorReforzar.map((t) => t.tema),
@@ -500,6 +546,8 @@ const progresoService = {
       promedioPorcentaje,
       promedioNota,
       evaluacionesRealizadas,
+      evaluacionesComparables: intentosComparables.length,
+      resultadosAdaptativosPorVariante,
       temasDominados,
       temasPorReforzar,
       recomendaciones,

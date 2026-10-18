@@ -35,8 +35,12 @@ const validarConfiguracionAdaptativa = (configuracion, errores, requerida = fals
     errores.push("configuracionAdaptativa.criterios es obligatorio");
   }
 
-  if (requerida && configuracion.cantidadPorNivel === undefined) {
-    errores.push("configuracionAdaptativa.cantidadPorNivel es obligatoria");
+  if (
+    requerida &&
+    configuracion.cantidadPorNivel === undefined &&
+    configuracion.porNivel === undefined
+  ) {
+    errores.push("configuracionAdaptativa debe definir porNivel o cantidadPorNivel");
   } else if (configuracion.cantidadPorNivel !== undefined) {
     const cantidades = configuracion.cantidadPorNivel;
     if (!cantidades || typeof cantidades !== "object" || Array.isArray(cantidades)) {
@@ -53,6 +57,39 @@ const validarConfiguracionAdaptativa = (configuracion, errores, requerida = fals
           (!Number.isInteger(Number(cantidad)) || Number(cantidad) < 1 || Number(cantidad) > 20)
         ) {
           errores.push(`cantidadPorNivel.${nivel} debe ser un entero entre 1 y 20`);
+        }
+      }
+    }
+  }
+
+  if (configuracion.porNivel !== undefined) {
+    if (!configuracion.porNivel || typeof configuracion.porNivel !== "object") {
+      errores.push("configuracionAdaptativa.porNivel debe ser un objeto");
+    } else {
+      for (const nivel of NIVELES) {
+        const regla = configuracion.porNivel[nivel];
+        if (!regla || typeof regla !== "object") {
+          errores.push(`porNivel.${nivel} es obligatorio`);
+          continue;
+        }
+        const cantidad = Number(regla.cantidadPreguntas);
+        if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 20) {
+          errores.push(`porNivel.${nivel}.cantidadPreguntas debe estar entre 1 y 20`);
+        }
+        if (!regla.distribucion || typeof regla.distribucion !== "object") {
+          errores.push(`porNivel.${nivel}.distribucion es obligatoria`);
+          continue;
+        }
+        const total = NIVELES.reduce((suma, dificultad) => {
+          const valor = Number(regla.distribucion[dificultad] ?? 0);
+          if (!Number.isInteger(valor) || valor < 0) {
+            errores.push(`distribucion.${dificultad} debe ser un entero no negativo`);
+            return suma;
+          }
+          return suma + valor;
+        }, 0);
+        if (Number.isInteger(cantidad) && total !== cantidad) {
+          errores.push(`la distribución de ${nivel} debe sumar ${cantidad}`);
         }
       }
     }

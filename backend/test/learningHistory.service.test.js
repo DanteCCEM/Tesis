@@ -15,6 +15,17 @@ const cargarServicio = () => {
             item.intentoId === where.intentoId_tema.intentoId &&
             item.tema === where.intentoId_tema.tema,
         ) ?? null,
+      findMany: async ({ where, take }) =>
+        historiales
+          .filter(
+            (item) =>
+              item.estudianteId === where.estudianteId &&
+              item.asignacionCursoId === where.asignacionCursoId &&
+              item.tema === where.tema,
+          )
+          .sort((a, b) => b.id - a.id)
+          .slice(0, take)
+          .map((item) => ({ porcentaje: item.porcentaje })),
       aggregate: async ({ where }) => {
         const items = historiales.filter(
           (item) =>
@@ -88,9 +99,14 @@ test("registra historial y resumen independiente para cada tema", async () => {
 
   assert.equal(historiales.length, 2);
   assert.equal(historiales.find((item) => item.tema === "Fracciones").nivelDespues, "BASICO");
-  assert.equal(historiales.find((item) => item.tema === "Ecuaciones").nivelDespues, "AVANZADO");
+  assert.equal(
+    historiales.find((item) => item.tema === "Ecuaciones").nivelDespues,
+    "INTERMEDIO",
+    "un resultado perfecto no salta directamente de básico a avanzado",
+  );
   assert.equal(resumenes.get("5:8:Fracciones").porcentajeDominio, 50);
   assert.equal(resumenes.get("5:8:Ecuaciones").porcentajeDominio, 100);
+  assert.equal(resumenes.get("5:8:Ecuaciones").nivelActual, "INTERMEDIO");
 
   await service.procesarIntento(datos);
   assert.equal(historiales.length, 2, "un reintento no duplica el historial");

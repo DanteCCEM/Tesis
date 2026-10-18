@@ -55,9 +55,9 @@ const EMPTY_FORM = {
   type: 'multiple',
   deadline: '',
   adaptiveCriteria: '',
-  adaptiveBasicAmount: 5,
+  adaptiveBasicAmount: 10,
   adaptiveIntermediateAmount: 7,
-  adaptiveAdvancedAmount: 10,
+  adaptiveAdvancedAmount: 5,
 }
 
 function elegirPlanCurricular(planes = []) {
@@ -601,6 +601,19 @@ function CrearEvaluacion() {
         return
       }
     }
+    if (publicar && isAdaptive) {
+      const maximoVariante = Math.max(
+        Number(form.adaptiveBasicAmount),
+        Number(form.adaptiveIntermediateAmount),
+        Number(form.adaptiveAdvancedAmount),
+      )
+      if (questions.length < maximoVariante) {
+        setBannerError(
+          `El banco adaptativo necesita al menos ${maximoVariante} preguntas para cubrir todas las variantes.`,
+        )
+        return
+      }
+    }
 
     setSubmitting(true)
     setBanner('')
@@ -629,7 +642,7 @@ function CrearEvaluacion() {
                   INTERMEDIO: Number(form.adaptiveIntermediateAmount),
                   AVANZADO: Number(form.adaptiveAdvancedAmount),
                 },
-                version: 1,
+                version: 2,
               },
             }
           : {}),
@@ -785,8 +798,8 @@ function CrearEvaluacion() {
                   <span>{evaluationType?.description}</span>
                   {isAdaptive && (
                     <small>
-                      En esta etapa se guarda la configuración. La selección personalizada de
-                      preguntas por estudiante se implementará en la siguiente fase.
+                      Al iniciar, cada estudiante recibirá una variante persistente según su
+                      nivel actual en el tema, con distinta cantidad y mezcla de dificultad.
                     </small>
                   )}
                 </div>

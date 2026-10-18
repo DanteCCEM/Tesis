@@ -7,6 +7,10 @@ const {
   UMBRALES,
   UMBRAL_DOMINIO,
 } = require("../config/learningRules");
+const {
+  normalizarConfiguracionAdaptativa,
+  decidirTransicionNivel,
+} = require("../config/adaptiveEvaluationRules");
 
 // Mensaje de retroalimentación: siempre positivo y claro.
 const construirMensaje = (nivel, porcentaje) => {
@@ -226,11 +230,16 @@ const adaptiveLearningService = {
     evaluacionId,
     intentoId,
     dificultadEvaluacion,
+    nivelAlRendir,
+    configuracionAdaptativa,
     fecha,
     porcentaje,
     respuestas,
   }) {
     const analisis = analizar({ porcentaje, respuestas });
+    const reglasAdaptacion = normalizarConfiguracionAdaptativa(
+      configuracionAdaptativa ?? {},
+    );
     if (!asignacionCursoId) {
       throw ApiError.conflict(
         "La evaluación no está vinculada a una asignación académica",
@@ -270,6 +279,19 @@ const adaptiveLearningService = {
           },
         });
 
+        const cantidadEvidenciasPrevias = Math.max(
+          0,
+          reglasAdaptacion.transicion.evaluacionesRecientes - 1,
+        );
+        const historialReciente = cantidadEvidenciasPrevias > 0
+          ? await tx.historialProgreso.findMany({
+              where: { estudianteId, asignacionCursoId, tema: tema.tema },
+              orderBy: [{ fecha: "desc" }, { id: "desc" }],
+              take: cantidadEvidenciasPrevias,
+              select: { porcentaje: true },
+            })
+          : [];
+
         const acumuladoAnterior = await tx.historialProgreso.aggregate({
           where: { estudianteId, asignacionCursoId, tema: tema.tema },
           _sum: {
@@ -291,8 +313,17 @@ const adaptiveLearningService = {
         const porcentajeAcumulado = redondear(
           totalPreguntas > 0 ? (totalCorrectas / totalPreguntas) * 100 : 0,
         );
-        const nivelAntes = resumenAnterior?.nivelActual ?? "BASICO";
-        const nivelDespues = determinarNivel(porcentajeAcumulado);
+        const nivelAntes =
+          resumenAnterior?.nivelActual ?? nivelAlRendir ?? "BASICO";
+        const transicion = decidirTransicionNivel({
+          nivelActual: nivelAntes,
+          porcentajesRecientes: [
+            porcentajeTema,
+            ...historialReciente.map((item) => item.porcentaje),
+          ],
+          configuracion: reglasAdaptacion,
+        });
+        const nivelDespues = transicion.nivelSiguiente;
         const respuestasIncorrectas =
           tema.cantidadPreguntas - tema.respuestasCorrectas;
 

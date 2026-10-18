@@ -24,6 +24,10 @@ Las reglas se encuentran únicamente en
 `backend/src/config/learningRules.js`: básico por debajo de 55%, intermedio de
 55% a 80% inclusive y avanzado por encima de 80%.
 
+La transición de nivel y las cantidades/mezclas de una formativa se centralizan
+en `backend/src/config/adaptiveEvaluationRules.js`. La decisión puede considerar
+varias evidencias recientes y limita cualquier subida o bajada a un solo nivel.
+
 ## Evaluaciones relevantes
 
 Las evaluaciones `REGULAR`, `DIAGNOSTICA`, `FORMATIVA_ADAPTATIVA` y `FINAL`

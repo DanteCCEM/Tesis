@@ -1,8 +1,12 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const adaptiveLearningService = require("./adaptiveLearningService");
+const adaptiveEvaluationService = require("./adaptiveEvaluation.service");
 const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
-const { determinarNivel } = require("../config/learningRules");
+const {
+  determinarNivel,
+  porcentajeANota20,
+} = require("../config/learningRules");
 
 const usuarioPublico = { id: true, username: true, nombres: true, correo: true };
 
@@ -61,6 +65,13 @@ const cargarIntentoPropio = async (intentoId, estudianteId) => {
   return intento;
 };
 
+const idsPreguntasAsignadas = (intento) =>
+  Array.isArray(intento?.preguntasAsignadas)
+    ? intento.preguntasAsignadas
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0)
+    : [];
+
 // Construye el objeto de resultado a partir de un intento ya incluido.
 const construirResultado = (intento) => {
   const respuestas = intento.respuestas.map((respuesta) => {
@@ -115,9 +126,13 @@ const construirResultado = (intento) => {
       esAdaptativa: intento.evaluacion.esAdaptativa,
     },
     estudiante: intento.estudiante,
-    nota: intento.puntajeTotal,
+    nota: intento.nota,
     porcentaje: intento.porcentaje,
     nivelObtenido: intento.nivelObtenido,
+    nivelAlRendir: intento.nivelAlRendir,
+    dificultadVariante: intento.dificultadVariante,
+    cantidadPreguntas: intento.cantidadPreguntas,
+    especificacionAdaptativa: intento.especificacionAdaptativa,
     retroalimentacionIA: intento.retroalimentacionIA ?? null,
     respuestas,
     temasCorrectos,
@@ -157,7 +172,11 @@ const registrarProgresoFinalizado = (intentoFinal) =>
     asignacionCursoId: intentoFinal.evaluacion.curso.asignacionCursoId,
     evaluacionId: intentoFinal.evaluacionId,
     intentoId: intentoFinal.id,
-    dificultadEvaluacion: intentoFinal.evaluacion.nivelDificultad,
+    dificultadEvaluacion:
+      intentoFinal.dificultadVariante ?? intentoFinal.evaluacion.nivelDificultad,
+    nivelAlRendir: intentoFinal.nivelAlRendir,
+    configuracionAdaptativa:
+      intentoFinal.evaluacion.configuracionAdaptativa,
     fecha: intentoFinal.fechaFin,
     porcentaje: intentoFinal.porcentaje,
     respuestas: intentoFinal.respuestas.map((r) => ({
@@ -218,8 +237,20 @@ const intentosService = {
     }
 
     if (!intento) {
+      const especificacion = await adaptiveEvaluationService.crearEspecificacion({
+        evaluacion,
+        estudianteId: usuario.id,
+      });
       intento = await prisma.intentoEvaluacion.create({
-        data: { evaluacionId, estudianteId: usuario.id },
+        data: {
+          evaluacionId,
+          estudianteId: usuario.id,
+          nivelAlRendir: especificacion.nivelAlRendir,
+          dificultadVariante: especificacion.dificultadVariante,
+          cantidadPreguntas: especificacion.cantidadPreguntas,
+          especificacionAdaptativa: especificacion,
+          preguntasAsignadas: especificacion.preguntasIds,
+        },
         include: { respuestas: true },
       });
 
@@ -231,14 +262,27 @@ const intentosService = {
       }
     }
 
+    const idsAsignados = idsPreguntasAsignadas(intento);
+    const evaluacionAsignada = {
+      ...evaluacion,
+      preguntas:
+        idsAsignados.length > 0
+          ? evaluacion.preguntas.filter((pregunta) => idsAsignados.includes(pregunta.id))
+          : evaluacion.preguntas,
+    };
+
     return {
       intento: {
         id: intento.id,
         estado: intento.estado,
         fechaInicio: intento.fechaInicio,
         evaluacionId: intento.evaluacionId,
+        nivelAlRendir: intento.nivelAlRendir,
+        dificultadVariante: intento.dificultadVariante,
+        cantidadPreguntas: intento.cantidadPreguntas,
+        especificacionAdaptativa: intento.especificacionAdaptativa,
       },
-      evaluacion: ocultarRespuestas(evaluacion),
+      evaluacion: ocultarRespuestas(evaluacionAsignada),
       // Respuestas ya guardadas (para reanudar el intento).
       respuestasGuardadas: intento.respuestas.map((r) => ({
         preguntaId: r.preguntaId,
@@ -261,6 +305,10 @@ const intentosService = {
     });
     if (!pregunta || pregunta.evaluacionId !== intento.evaluacionId) {
       throw ApiError.badRequest("La pregunta no pertenece a esta evaluación");
+    }
+    const idsAsignados = idsPreguntasAsignadas(intento);
+    if (idsAsignados.length > 0 && !idsAsignados.includes(pregunta.id)) {
+      throw ApiError.forbidden("La pregunta no pertenece a tu variante asignada");
     }
 
     let altId = null;
@@ -319,9 +367,15 @@ const intentosService = {
       return { ...resultadoExistente, adaptativo: adaptativoExistente };
     }
 
+    const idsAsignados = idsPreguntasAsignadas(intento);
     const evaluacion = await prisma.evaluacion.findUnique({
       where: { id: intento.evaluacionId },
-      include: { preguntas: { include: { alternativas: true } } },
+      include: {
+        preguntas: {
+          ...(idsAsignados.length > 0 ? { where: { id: { in: idsAsignados } } } : {}),
+          include: { alternativas: true },
+        },
+      },
     });
 
     const respuestas = await prisma.respuestaEstudiante.findMany({
@@ -394,6 +448,7 @@ const intentosService = {
     const porcentaje =
       puntajeMaximo > 0 ? Math.round((puntajeTotal / puntajeMaximo) * 10000) / 100 : 0;
     const nivelObtenido = determinarNivel(porcentaje);
+    const nota = porcentajeANota20(porcentaje);
 
     operaciones.push(
       prisma.intentoEvaluacion.update({
@@ -403,7 +458,9 @@ const intentosService = {
           fechaFin: new Date(),
           puntajeTotal,
           porcentaje,
+          nota,
           nivelObtenido,
+          cantidadPreguntas: evaluacion.preguntas.length,
         },
       }),
     );

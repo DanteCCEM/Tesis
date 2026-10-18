@@ -369,7 +369,13 @@ model IntentoEvaluacion {
   fechaFin            DateTime?
   puntajeTotal        Float            @default(0)
   porcentaje          Float            @default(0)
+  nota                Float            @default(0)
   nivelObtenido       NivelDificultad?
+  nivelAlRendir       NivelDificultad?
+  dificultadVariante  NivelDificultad?
+  cantidadPreguntas   Int?
+  especificacionAdaptativa Json?
+  preguntasAsignadas  Json?
   estado              EstadoIntento    @default(EN_PROGRESO)
   retroalimentacionIA Json?
 

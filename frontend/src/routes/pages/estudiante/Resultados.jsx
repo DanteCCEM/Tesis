@@ -209,6 +209,10 @@ function EstudianteResultados() {
       mastered: resultado.temasCorrectos ?? [],
       toReinforce: resultado.temasPorReforzar ?? [],
       levelLabel: NIVEL_LABEL[resultado.nivelObtenido] ?? 'Nivel',
+      variantLabel:
+        resultado.evaluacion?.tipoEvaluacion === 'FORMATIVA_ADAPTATIVA'
+          ? `Variante ${NIVEL_LABEL[resultado.nivelAlRendir]?.toLowerCase() ?? 'adaptativa'} · ${resultado.cantidadPreguntas ?? total} preguntas`
+          : null,
       details: detalles,
       title: resultado.evaluacion?.titulo ?? 'Resultados',
       topic: resultado.evaluacion?.tema ?? '',
@@ -302,6 +306,7 @@ function EstudianteResultados() {
               Acertaste {data.correct} de {data.total} preguntas.
             </p>
             <span className={styles.levelTag}>{data.levelLabel}</span>
+            {data.variantLabel && <p>{data.variantLabel}</p>}
           </div>
         </div>
 
