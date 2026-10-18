@@ -2,6 +2,7 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const adaptiveLearningService = require("./adaptiveLearningService");
 const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
+const { determinarNivel } = require("../config/learningRules");
 
 const usuarioPublico = { id: true, username: true, nombres: true, correo: true };
 
@@ -29,13 +30,6 @@ const ocultarRespuestas = (evaluacion) => ({
     };
   }),
 });
-
-// Nivel inicial sugerido a partir del porcentaje obtenido.
-const nivelPorPorcentaje = (porcentaje) => {
-  if (porcentaje >= 80) return "AVANZADO";
-  if (porcentaje >= 50) return "INTERMEDIO";
-  return "BASICO";
-};
 
 // Retroalimentación inicial automática por pregunta.
 const generarRetroalimentacion = (esCorrecta, pregunta, respondida) => {
@@ -136,7 +130,14 @@ const includeResultado = {
   estudiante: { select: usuarioPublico },
   evaluacion: {
     include: {
-      curso: { select: { id: true, nombre: true, docenteId: true } },
+      curso: {
+        select: {
+          id: true,
+          nombre: true,
+          docenteId: true,
+          asignacionCursoId: true,
+        },
+      },
       practicaAdaptativa: { select: { id: true, motivoResumen: true } },
     },
   },
@@ -148,6 +149,26 @@ const includeResultado = {
     },
   },
 };
+
+const registrarProgresoFinalizado = (intentoFinal) =>
+  adaptiveLearningService.procesarIntento({
+    estudianteId: intentoFinal.estudianteId,
+    cursoId: intentoFinal.evaluacion.cursoId,
+    asignacionCursoId: intentoFinal.evaluacion.curso.asignacionCursoId,
+    evaluacionId: intentoFinal.evaluacionId,
+    intentoId: intentoFinal.id,
+    dificultadEvaluacion: intentoFinal.evaluacion.nivelDificultad,
+    fecha: intentoFinal.fechaFin,
+    porcentaje: intentoFinal.porcentaje,
+    respuestas: intentoFinal.respuestas.map((r) => ({
+      preguntaId: r.preguntaId,
+      tema: r.pregunta.tema,
+      subtema: intentoFinal.evaluacion.subtema || r.pregunta.tema,
+      esCorrecta: r.esCorrecta,
+      temaCurricularId: intentoFinal.evaluacion.temaCurricularId,
+      subtemaCurricularId: intentoFinal.evaluacion.subtemaCurricularId,
+    })),
+  });
 
 const intentosService = {
   // Crea o recupera un intento EN_PROGRESO y devuelve las preguntas sin
@@ -284,7 +305,18 @@ const intentosService = {
   async finalizar(intentoId, usuario) {
     const intento = await cargarIntentoPropio(intentoId, usuario.id);
     if (intento.estado === "FINALIZADO") {
-      throw ApiError.badRequest("El intento ya fue finalizado");
+      const intentoFinalizado = await prisma.intentoEvaluacion.findUnique({
+        where: { id: intentoId },
+        include: includeResultado,
+      });
+      const resultadoExistente = construirResultado(intentoFinalizado);
+      if (intentoFinalizado.evaluacion.esPracticaAdaptativa) {
+        return resultadoExistente;
+      }
+      const adaptativoExistente = await registrarProgresoFinalizado(
+        intentoFinalizado,
+      );
+      return { ...resultadoExistente, adaptativo: adaptativoExistente };
     }
 
     const evaluacion = await prisma.evaluacion.findUnique({
@@ -361,7 +393,7 @@ const intentosService = {
 
     const porcentaje =
       puntajeMaximo > 0 ? Math.round((puntajeTotal / puntajeMaximo) * 10000) / 100 : 0;
-    const nivelObtenido = nivelPorPorcentaje(porcentaje);
+    const nivelObtenido = determinarNivel(porcentaje);
 
     operaciones.push(
       prisma.intentoEvaluacion.update({
@@ -395,16 +427,7 @@ const intentosService = {
 
     // La diagnóstica establece el perfil inicial; las formativas y finales lo
     // mantienen actualizado. Las prácticas individuales no alteran este perfil.
-    const adaptativo = await adaptiveLearningService.procesarIntento({
-      estudianteId: intentoFinal.estudianteId,
-      cursoId: intentoFinal.evaluacion.cursoId,
-      porcentaje: intentoFinal.porcentaje,
-      respuestas: intentoFinal.respuestas.map((r) => ({
-        tema: r.pregunta.tema,
-        subtema: intentoFinal.evaluacion.subtema || r.pregunta.tema,
-        esCorrecta: r.esCorrecta,
-      })),
-    });
+    const adaptativo = await registrarProgresoFinalizado(intentoFinal);
 
     return { ...resultado, adaptativo };
   },

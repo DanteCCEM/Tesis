@@ -1,25 +1,12 @@
 const prisma = require("../config/prisma");
-
-// ===================== UMBRALES (lógica transparente) =====================
-// Reglas explícitas y fáciles de justificar en una tesis:
-//   - porcentaje < 55            -> BASICO
-//   - 55 <= porcentaje <= 80     -> INTERMEDIO
-//   - porcentaje > 80            -> AVANZADO
-const UMBRAL_INTERMEDIO = 55; // a partir de aquí deja de ser BASICO
-const UMBRAL_AVANZADO = 80; // por encima de aquí es AVANZADO
-
-// Un tema se considera "dominado" si su porcentaje de dominio alcanza el
-// umbral avanzado; en caso contrario, es un tema "por reforzar".
-const UMBRAL_DOMINIO = UMBRAL_AVANZADO;
-
-// Determina el nivel a partir de un porcentaje (0-100).
-const determinarNivel = (porcentaje) => {
-  if (porcentaje < UMBRAL_INTERMEDIO) return "BASICO";
-  if (porcentaje <= UMBRAL_AVANZADO) return "INTERMEDIO";
-  return "AVANZADO";
-};
-
-const redondear = (valor) => Math.round(valor * 100) / 100;
+const ApiError = require("../utils/ApiError");
+const {
+  determinarNivel,
+  porcentajeANota20,
+  redondearPorcentaje: redondear,
+  UMBRALES,
+  UMBRAL_DOMINIO,
+} = require("../config/learningRules");
 
 // Mensaje de retroalimentación: siempre positivo y claro.
 const construirMensaje = (nivel, porcentaje) => {
@@ -125,6 +112,37 @@ const agrupar = (items, clave) => {
   return mapa;
 };
 
+const agruparRespuestasParaHistorial = (respuestas) => {
+  const temas = new Map();
+  for (const respuesta of respuestas) {
+    const tema = String(respuesta.tema || "General").trim() || "General";
+    const clave = tema.toLocaleLowerCase("es");
+    const actual = temas.get(clave) || {
+      tema,
+      temaCurricularId: respuesta.temaCurricularId ?? null,
+      subtemaCurricularId: respuesta.subtemaCurricularId ?? null,
+      resultadosPorPregunta: new Map(),
+    };
+    const preguntaClave = respuesta.preguntaId ?? `fila:${actual.resultadosPorPregunta.size}`;
+    actual.resultadosPorPregunta.set(
+      preguntaClave,
+      Boolean(actual.resultadosPorPregunta.get(preguntaClave) || respuesta.esCorrecta),
+    );
+    if (actual.temaCurricularId == null && respuesta.temaCurricularId != null) {
+      actual.temaCurricularId = respuesta.temaCurricularId;
+    }
+    if (actual.subtemaCurricularId == null && respuesta.subtemaCurricularId != null) {
+      actual.subtemaCurricularId = respuesta.subtemaCurricularId;
+    }
+    temas.set(clave, actual);
+  }
+  return [...temas.values()].map(({ resultadosPorPregunta, ...tema }) => ({
+    ...tema,
+    cantidadPreguntas: resultadosPorPregunta.size,
+    respuestasCorrectas: [...resultadosPorPregunta.values()].filter(Boolean).length,
+  }));
+};
+
 // Convierte el mapa agrupado en una lista ordenada por cantidad de errores.
 const aListaErrores = (mapa, nombreClave) =>
   [...mapa.entries()]
@@ -182,55 +200,164 @@ const adaptiveLearningService = {
   determinarNivel,
   construirRecomendacion,
   analizar,
-  UMBRALES: { UMBRAL_INTERMEDIO, UMBRAL_AVANZADO, UMBRAL_DOMINIO },
+  UMBRALES,
 
   /**
    * Procesa el resultado de un intento finalizado y:
    *  - agrupa errores por tema y subtema
    *  - identifica temas dominados y por reforzar
-   *  - actualiza/crea ProgresoEstudiante por tema
+   *  - registra un HistorialProgreso inmutable por tema
+   *  - actualiza el resumen acumulado ProgresoEstudiante por tema
    *  - devuelve un objeto estructurado para Resultados.jsx y Progreso.jsx
    *
    * @param {object} params
    * @param {number} params.estudianteId
    * @param {number} params.cursoId
-   * @param {number} params.porcentaje  Porcentaje general del intento (0-100).
-   * @param {Array<{tema:string, subtema?:string, esCorrecta:boolean}>} params.respuestas
+   * @param {number} params.asignacionCursoId
+   * @param {number} params.evaluacionId
+   * @param {number} params.intentoId
+   * @param {string} params.dificultadEvaluacion
+   * @param {Array<{preguntaId:number, tema:string, subtema?:string, esCorrecta:boolean, temaCurricularId?:number, subtemaCurricularId?:number}>} params.respuestas
    */
-  async procesarIntento({ estudianteId, cursoId, porcentaje, respuestas }) {
+  async procesarIntento({
+    estudianteId,
+    cursoId,
+    asignacionCursoId,
+    evaluacionId,
+    intentoId,
+    dificultadEvaluacion,
+    fecha,
+    porcentaje,
+    respuestas,
+  }) {
     const analisis = analizar({ porcentaje, respuestas });
+    if (!asignacionCursoId) {
+      throw ApiError.conflict(
+        "La evaluación no está vinculada a una asignación académica",
+      );
+    }
 
-    // Persistir progreso por tema (upsert por la clave única
-    // [estudianteId, cursoId, tema]).
-    const operaciones = analisis.errores.porTema.map((t) => {
-      const nivelTema = determinarNivel(t.porcentajeDominio);
-      const recoTema = recomendacionPorTema(nivelTema, t.tema);
-      return prisma.progresoEstudiante.upsert({
-        where: {
-          estudianteId_cursoId_tema: { estudianteId, cursoId, tema: t.tema },
-        },
-        update: {
-          nivelActual: nivelTema,
-          porcentajeDominio: t.porcentajeDominio,
-          recomendaciones: recoTema,
-        },
-        create: {
-          estudianteId,
-          cursoId,
-          tema: t.tema,
-          nivelActual: nivelTema,
-          porcentajeDominio: t.porcentajeDominio,
-          recomendaciones: recoTema,
-        },
-      });
+    const temas = agruparRespuestasParaHistorial(respuestas);
+    const progresoGuardado = await prisma.$transaction(async (tx) => {
+      const guardados = [];
+
+      for (const tema of temas) {
+        const historialExistente = await tx.historialProgreso.findUnique({
+          where: { intentoId_tema: { intentoId, tema: tema.tema } },
+        });
+
+        if (historialExistente) {
+          const resumen = await tx.progresoEstudiante.findUnique({
+            where: {
+              estudianteId_cursoId_tema: {
+                estudianteId,
+                cursoId,
+                tema: tema.tema,
+              },
+            },
+          });
+          if (resumen) guardados.push(resumen);
+          continue;
+        }
+
+        const resumenAnterior = await tx.progresoEstudiante.findUnique({
+          where: {
+            estudianteId_cursoId_tema: {
+              estudianteId,
+              cursoId,
+              tema: tema.tema,
+            },
+          },
+        });
+
+        const acumuladoAnterior = await tx.historialProgreso.aggregate({
+          where: { estudianteId, asignacionCursoId, tema: tema.tema },
+          _sum: {
+            cantidadPreguntas: true,
+            respuestasCorrectas: true,
+          },
+          _count: { _all: true },
+        });
+
+        const preguntasPrevias = acumuladoAnterior._sum.cantidadPreguntas ?? 0;
+        const correctasPrevias = acumuladoAnterior._sum.respuestasCorrectas ?? 0;
+        const totalPreguntas = preguntasPrevias + tema.cantidadPreguntas;
+        const totalCorrectas = correctasPrevias + tema.respuestasCorrectas;
+        const porcentajeTema = redondear(
+          tema.cantidadPreguntas > 0
+            ? (tema.respuestasCorrectas / tema.cantidadPreguntas) * 100
+            : 0,
+        );
+        const porcentajeAcumulado = redondear(
+          totalPreguntas > 0 ? (totalCorrectas / totalPreguntas) * 100 : 0,
+        );
+        const nivelAntes = resumenAnterior?.nivelActual ?? "BASICO";
+        const nivelDespues = determinarNivel(porcentajeAcumulado);
+        const respuestasIncorrectas =
+          tema.cantidadPreguntas - tema.respuestasCorrectas;
+
+        await tx.historialProgreso.create({
+          data: {
+            estudianteId,
+            asignacionCursoId,
+            temaCurricularId: tema.temaCurricularId,
+            subtemaCurricularId: tema.subtemaCurricularId,
+            evaluacionId,
+            intentoId,
+            tema: tema.tema,
+            porcentaje: porcentajeTema,
+            nota: porcentajeANota20(porcentajeTema),
+            nivelAntes,
+            nivelDespues,
+            dificultadEvaluacion,
+            cantidadPreguntas: tema.cantidadPreguntas,
+            respuestasCorrectas: tema.respuestasCorrectas,
+            respuestasIncorrectas,
+            fecha: fecha ?? new Date(),
+          },
+        });
+
+        const recoTema = recomendacionPorTema(nivelDespues, tema.tema);
+        const resumen = await tx.progresoEstudiante.upsert({
+          where: {
+            estudianteId_cursoId_tema: {
+              estudianteId,
+              cursoId,
+              tema: tema.tema,
+            },
+          },
+          update: {
+            asignacionCursoId,
+            temaCurricularId: tema.temaCurricularId,
+            nivelActual: nivelDespues,
+            porcentajeDominio: porcentajeAcumulado,
+            cantidadEvaluaciones: acumuladoAnterior._count._all + 1,
+            recomendaciones: recoTema,
+          },
+          create: {
+            estudianteId,
+            cursoId,
+            asignacionCursoId,
+            temaCurricularId: tema.temaCurricularId,
+            tema: tema.tema,
+            nivelActual: nivelDespues,
+            porcentajeDominio: porcentajeAcumulado,
+            cantidadEvaluaciones: 1,
+            recomendaciones: recoTema,
+          },
+        });
+        guardados.push(resumen);
+      }
+
+      return guardados;
     });
-
-    const progresoGuardado = await prisma.$transaction(operaciones);
 
     const progreso = progresoGuardado.map((p) => ({
       tema: p.tema,
       nivelActual: p.nivelActual,
       porcentajeDominio: p.porcentajeDominio,
+      cantidadEvaluaciones: p.cantidadEvaluaciones,
+      ultimaActualizacion: p.ultimaActualizacion,
       recomendaciones: p.recomendaciones,
     }));
 

@@ -118,6 +118,7 @@ model Usuario {
   matriculas             Matricula[]
   intentos               IntentoEvaluacion[]
   progresos              ProgresoEstudiante[]
+  historialProgreso      HistorialProgreso[]
   practicasAdaptativas   PracticaAdaptativa[]
   evaluacionesObjetivo   Evaluacion[]         @relation("PracticasObjetivo")
   auditoriasComoActor    Auditoria[]          @relation("AuditoriaActor")
@@ -259,7 +260,9 @@ model AsignacionCurso {
   seccion          Seccion                 @relation(fields: [seccionId], references: [id], onDelete: Restrict)
   docente          Usuario                 @relation(fields: [docenteId], references: [id], onDelete: Restrict)
   anioAcademico    AnioAcademico           @relation(fields: [anioAcademicoId], references: [id], onDelete: Restrict)
-  cursoLegacy      Curso?
+  cursoLegacy       Curso?
+  progresos         ProgresoEstudiante[]
+  historialProgreso HistorialProgreso[]
 
   @@unique([areaCurricularId, seccionId, anioAcademicoId])
   @@index([docenteId, anioAcademicoId])
@@ -327,6 +330,7 @@ model Evaluacion {
   preguntas          Pregunta[]
   intentos           IntentoEvaluacion[]
   practicaAdaptativa PracticaAdaptativa?
+  historialProgreso  HistorialProgreso[]
 
   @@index([cursoId, tipoEvaluacion])
   @@index([anioAcademicoId, tipoEvaluacion])
@@ -375,7 +379,8 @@ model IntentoEvaluacion {
   evaluacionId Int
   evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
 
-  respuestas RespuestaEstudiante[]
+  respuestas         RespuestaEstudiante[]
+  historialProgreso HistorialProgreso[]
 
   @@unique([estudianteId, evaluacionId])
 }
@@ -398,12 +403,13 @@ model RespuestaEstudiante {
 }
 
 model ProgresoEstudiante {
-  id                Int             @id @default(autoincrement())
-  tema              String
-  nivelActual       NivelDificultad @default(BASICO)
-  porcentajeDominio Float           @default(0)
-  recomendaciones   String?
-  updatedAt         DateTime        @updatedAt
+  id                   Int             @id @default(autoincrement())
+  tema                 String
+  nivelActual          NivelDificultad @default(BASICO)
+  porcentajeDominio    Float           @default(0)
+  cantidadEvaluaciones Int             @default(0)
+  recomendaciones      String?
+  ultimaActualizacion  DateTime        @updatedAt
 
   estudianteId Int
   estudiante   Usuario @relation(fields: [estudianteId], references: [id])
@@ -411,7 +417,52 @@ model ProgresoEstudiante {
   cursoId Int
   curso   Curso @relation(fields: [cursoId], references: [id], onDelete: Cascade)
 
+  asignacionCursoId Int?
+  asignacionCurso   AsignacionCurso? @relation(fields: [asignacionCursoId], references: [id], onDelete: Restrict)
+
+  temaCurricularId Int?
+  temaCurricular   TemaCurricular? @relation(fields: [temaCurricularId], references: [id], onDelete: SetNull)
+
   @@unique([estudianteId, cursoId, tema])
+  @@index([asignacionCursoId, estudianteId])
+  @@index([temaCurricularId])
+}
+
+model HistorialProgreso {
+  id                    Int              @id @default(autoincrement())
+  tema                  String
+  porcentaje            Float
+  nota                  Float
+  nivelAntes            NivelDificultad
+  nivelDespues          NivelDificultad
+  dificultadEvaluacion  NivelDificultad
+  cantidadPreguntas     Int
+  respuestasCorrectas   Int
+  respuestasIncorrectas Int
+  fecha                 DateTime         @default(now())
+
+  estudianteId Int
+  estudiante   Usuario @relation(fields: [estudianteId], references: [id], onDelete: Restrict)
+
+  asignacionCursoId Int
+  asignacionCurso   AsignacionCurso @relation(fields: [asignacionCursoId], references: [id], onDelete: Restrict)
+
+  temaCurricularId Int?
+  temaCurricular   TemaCurricular? @relation(fields: [temaCurricularId], references: [id], onDelete: SetNull)
+
+  subtemaCurricularId Int?
+  subtemaCurricular   SubtemaCurricular? @relation(fields: [subtemaCurricularId], references: [id], onDelete: SetNull)
+
+  evaluacionId Int
+  evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Restrict)
+
+  intentoId Int
+  intento   IntentoEvaluacion @relation(fields: [intentoId], references: [id], onDelete: Restrict)
+
+  @@unique([intentoId, tema])
+  @@index([estudianteId, asignacionCursoId, tema, fecha])
+  @@index([evaluacionId])
+  @@index([temaCurricularId, fecha])
 }
 
 model PracticaAdaptativa {
@@ -475,8 +526,10 @@ model TemaCurricular {
   unidadCurricularId Int
   unidadCurricular   UnidadCurricular @relation(fields: [unidadCurricularId], references: [id], onDelete: Cascade)
 
-  subtemas     SubtemaCurricular[]
-  evaluaciones Evaluacion[]
+  subtemas          SubtemaCurricular[]
+  evaluaciones      Evaluacion[]
+  progresos         ProgresoEstudiante[]
+  historialProgreso HistorialProgreso[]
 }
 
 model SubtemaCurricular {
@@ -490,5 +543,6 @@ model SubtemaCurricular {
   temaCurricularId Int
   temaCurricular   TemaCurricular @relation(fields: [temaCurricularId], references: [id], onDelete: Cascade)
 
-  evaluaciones Evaluacion[]
+  evaluaciones      Evaluacion[]
+  historialProgreso HistorialProgreso[]
 }

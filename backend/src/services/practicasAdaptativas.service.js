@@ -3,7 +3,7 @@ const ApiError = require("../utils/ApiError");
 const {
   determinarNivel,
   UMBRALES,
-} = require("./adaptiveLearningService");
+} = require("../config/learningRules");
 const aiService = require("./aiService");
 const {
   verificarEstudianteCurso,
@@ -41,18 +41,19 @@ const agruparErroresPorTema = (intentos) => {
 
 const definirEnfoque = ({
   ultimoPorcentaje,
-  nivelActual,
   temasConMasErrores,
   temasDominados,
   temasPorReforzar,
 }) => {
-  if (ultimoPorcentaje < UMBRALES.UMBRAL_INTERMEDIO) {
+  const nivelResultado = determinarNivel(ultimoPorcentaje);
+  if (nivelResultado === "BASICO") {
     return {
-      regla: "MENOR_55",
+      regla: `MENOR_${UMBRALES.UMBRAL_INTERMEDIO}`,
       dificultad: "BASICO",
       titulo: "Repaso básico personalizado",
       descripcion:
-        "Tu último resultado fue menor al 55%. Esta práctica se centra en conceptos fundamentales de tus temas más débiles.",
+        `Tu último resultado fue menor al ${UMBRALES.UMBRAL_INTERMEDIO}%. ` +
+        "Esta práctica se centra en conceptos fundamentales de tus temas más débiles.",
       enfoque: "Preguntas básicas centradas en temas con más errores",
       temasEnfoque:
         temasConMasErrores.length > 0
@@ -61,13 +62,15 @@ const definirEnfoque = ({
     };
   }
 
-  if (ultimoPorcentaje <= UMBRALES.UMBRAL_AVANZADO) {
+  if (nivelResultado === "INTERMEDIO") {
     return {
-      regla: "ENTRE_55_80",
+      regla: `ENTRE_${UMBRALES.UMBRAL_INTERMEDIO}_${UMBRALES.UMBRAL_AVANZADO}`,
       dificultad: "INTERMEDIO",
       titulo: "Consolidación intermedia",
       descripcion:
-        "Tu desempeño está entre 55% y 80%. Esta práctica refuerza lo aprendido con ejercicios de dificultad media.",
+        `Tu desempeño está entre ${UMBRALES.UMBRAL_INTERMEDIO}% y ` +
+        `${UMBRALES.UMBRAL_AVANZADO}%. Esta práctica refuerza lo aprendido ` +
+        "con ejercicios de dificultad media.",
       enfoque: "Preguntas intermedias de consolidación",
       temasEnfoque:
         temasPorReforzar.length > 0
@@ -77,11 +80,12 @@ const definirEnfoque = ({
   }
 
   return {
-    regla: "MAYOR_80",
+    regla: `MAYOR_${UMBRALES.UMBRAL_AVANZADO}`,
     dificultad: "AVANZADO",
     titulo: "Retos avanzados",
     descripcion:
-      "Tu último resultado supera el 80%. Esta práctica propone retos contextualizados para profundizar.",
+      `Tu último resultado supera el ${UMBRALES.UMBRAL_AVANZADO}%. ` +
+      "Esta práctica propone retos contextualizados para profundizar.",
     enfoque: "Preguntas avanzadas y contextualizadas",
     temasEnfoque:
       temasDominados.length > 0
@@ -293,7 +297,6 @@ const practicasAdaptativasService = {
 
     const enfoque = definirEnfoque({
       ultimoPorcentaje,
-      nivelActual,
       temasConMasErrores,
       temasDominados,
       temasPorReforzar,

@@ -3,11 +3,11 @@ const ApiError = require("../utils/ApiError");
 const { verificarEstudianteCurso } = require("./accesoAcademico.service");
 const {
   determinarNivel,
-  construirRecomendacion,
-} = require("./adaptiveLearningService");
-
-// Un tema se considera dominado a partir de este porcentaje de dominio.
-const UMBRAL_DOMINIO = 80;
+  porcentajeANota20,
+  redondearPorcentaje,
+  esTemaDominado,
+} = require("../config/learningRules");
+const { construirRecomendacion } = require("./adaptiveLearningService");
 
 const NIVEL_LABEL = {
   BASICO: "Básico",
@@ -15,10 +15,8 @@ const NIVEL_LABEL = {
   AVANZADO: "Avanzado",
 };
 
-const redondear = (valor) => Math.round(valor * 100) / 100;
-
-// Convierte un porcentaje (0-100) a una nota en escala 0-20 (1 decimal).
-const aNota20 = (porcentaje) => Math.round((porcentaje / 5) * 10) / 10;
+const redondear = redondearPorcentaje;
+const aNota20 = porcentajeANota20;
 
 const normalizarTema = (valor) => String(valor ?? "").trim().toLowerCase();
 
@@ -32,7 +30,7 @@ const calcularEstadoEstudiante = ({
     porcentajeDominio ??
     (Number.isFinite(promedioEvaluaciones) ? promedioEvaluaciones : null);
 
-  if (dominio != null && dominio >= UMBRAL_DOMINIO) {
+  if (dominio != null && esTemaDominado(dominio)) {
     return "COMPLETADO";
   }
   if (
@@ -80,10 +78,14 @@ const construirPorTema = (intentos, progresos) => {
     }
   }
 
-  const dominioPorTexto = new Map(
+  const resumenPorTexto = new Map(
     progresos.map((progreso) => [
       normalizarTema(progreso.tema),
-      redondear(progreso.porcentajeDominio),
+      {
+        porcentajeDominio: redondear(progreso.porcentajeDominio),
+        nivelActual: progreso.nivelActual,
+        cantidadEvaluaciones: progreso.cantidadEvaluaciones ?? 0,
+      },
     ]),
   );
 
@@ -107,8 +109,9 @@ const construirPorTema = (intentos, progresos) => {
           )
         : null;
 
+    const resumenTema = resumenPorTexto.get(normalizarTema(entrada.tema));
     const porcentajeDominio =
-      dominioPorTexto.get(normalizarTema(entrada.tema)) ?? promedioEvaluaciones;
+      resumenTema?.porcentajeDominio ?? promedioEvaluaciones;
 
     consolidado.set(claveResultado, {
       temaCurricularId: entrada.temaCurricularId,
@@ -120,6 +123,11 @@ const construirPorTema = (intentos, progresos) => {
         promedioEvaluaciones,
       }),
       porcentajeDominio,
+      nivelActual:
+        resumenTema?.nivelActual ??
+        (porcentajeDominio != null ? determinarNivel(porcentajeDominio) : null),
+      cantidadEvaluaciones:
+        resumenTema?.cantidadEvaluaciones ?? entrada.finalizadas.length,
       promedioEvaluaciones,
       evaluacionesFinalizadas: entrada.finalizadas.length,
       tieneIntentoEnProgreso: entrada.enProgreso > 0,
@@ -144,6 +152,8 @@ const construirPorTema = (intentos, progresos) => {
         promedioEvaluaciones: null,
       }),
       porcentajeDominio,
+      nivelActual: progreso.nivelActual,
+      cantidadEvaluaciones: progreso.cantidadEvaluaciones ?? 0,
       promedioEvaluaciones: null,
       evaluacionesFinalizadas: 0,
       tieneIntentoEnProgreso: false,
@@ -157,6 +167,196 @@ const construirPorTema = (intentos, progresos) => {
 
 const verificarMatricula = async (estudianteId, cursoId) => {
   await verificarEstudianteCurso(cursoId, estudianteId);
+};
+
+const enteroPositivo = (valor, nombre, { opcional = true } = {}) => {
+  if ((valor === undefined || valor === null || valor === "") && opcional) return null;
+  const numero = Number(valor);
+  if (!Number.isInteger(numero) || numero <= 0) {
+    throw ApiError.badRequest(`${nombre} inválido`);
+  }
+  return numero;
+};
+
+const construirFiltrosHistorial = (filtros = {}) => {
+  const asignacionCursoId = enteroPositivo(
+    filtros.asignacionCursoId,
+    "asignacionCursoId",
+  );
+  const temaCurricularId = enteroPositivo(
+    filtros.temaCurricularId,
+    "temaCurricularId",
+  );
+  const limiteSolicitado = filtros.limite == null ? 500 : Number(filtros.limite);
+  if (!Number.isInteger(limiteSolicitado) || limiteSolicitado < 1) {
+    throw ApiError.badRequest("limite inválido");
+  }
+
+  const where = {};
+  if (asignacionCursoId) where.asignacionCursoId = asignacionCursoId;
+  if (temaCurricularId) where.temaCurricularId = temaCurricularId;
+
+  if (filtros.desde || filtros.hasta) {
+    where.fecha = {};
+    if (filtros.desde) {
+      const desde = new Date(filtros.desde);
+      if (Number.isNaN(desde.getTime())) throw ApiError.badRequest("desde inválido");
+      where.fecha.gte = desde;
+    }
+    if (filtros.hasta) {
+      const hasta = new Date(filtros.hasta);
+      if (Number.isNaN(hasta.getTime())) throw ApiError.badRequest("hasta inválido");
+      where.fecha.lte = hasta;
+    }
+  }
+
+  return {
+    where,
+    asignacionCursoId,
+    temaCurricularId,
+    limite: Math.min(limiteSolicitado, 500),
+  };
+};
+
+const obtenerAsignacion = async (asignacionCursoId) => {
+  const asignacion = await prisma.asignacionCurso.findUnique({
+    where: { id: asignacionCursoId },
+    include: {
+      areaCurricular: true,
+      anioAcademico: true,
+      seccion: { include: { grado: true } },
+    },
+  });
+  if (!asignacion) throw ApiError.notFound("Asignación académica no encontrada");
+  return asignacion;
+};
+
+const verificarEstudianteEnAsignacion = async (estudianteId, asignacion) => {
+  const matricula = await prisma.matriculaAcademica.findFirst({
+    where: {
+      estudianteId,
+      seccionId: asignacion.seccionId,
+      anioAcademicoId: asignacion.anioAcademicoId,
+      estado: "ACTIVO",
+    },
+    select: { id: true },
+  });
+  if (!matricula) {
+    throw ApiError.forbidden("El estudiante no pertenece a esta asignación");
+  }
+};
+
+const consultarEvolucion = async (estudianteId, filtros = {}) => {
+  const estudianteIdNum = enteroPositivo(estudianteId, "estudianteId", {
+    opcional: false,
+  });
+  const normalizados = construirFiltrosHistorial(filtros);
+  const where = { estudianteId: estudianteIdNum, ...normalizados.where };
+  const whereResumen = { estudianteId: estudianteIdNum };
+  if (normalizados.asignacionCursoId) {
+    whereResumen.asignacionCursoId = normalizados.asignacionCursoId;
+  }
+  if (normalizados.temaCurricularId) {
+    whereResumen.temaCurricularId = normalizados.temaCurricularId;
+  }
+
+  const [estudiante, resumenes, historial] = await Promise.all([
+    prisma.usuario.findUnique({
+      where: { id: estudianteIdNum },
+      select: { id: true, username: true, nombres: true, rol: true },
+    }),
+    prisma.progresoEstudiante.findMany({
+      where: whereResumen,
+      orderBy: [{ asignacionCursoId: "asc" }, { tema: "asc" }],
+      include: {
+        temaCurricular: { select: { id: true, titulo: true } },
+        asignacionCurso: {
+          select: {
+            id: true,
+            areaCurricular: { select: { id: true, nombre: true } },
+            anioAcademico: { select: { id: true, anio: true } },
+            seccion: {
+              select: {
+                id: true,
+                nombre: true,
+                grado: { select: { id: true, nombre: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.historialProgreso.findMany({
+      where,
+      orderBy: [{ fecha: "desc" }, { id: "desc" }],
+      take: normalizados.limite,
+      include: {
+        evaluacion: {
+          select: { id: true, titulo: true, tipoEvaluacion: true },
+        },
+        temaCurricular: { select: { id: true, titulo: true } },
+        subtemaCurricular: { select: { id: true, titulo: true } },
+        asignacionCurso: {
+          select: {
+            id: true,
+            areaCurricular: { select: { id: true, nombre: true } },
+            anioAcademico: { select: { id: true, anio: true } },
+            seccion: {
+              select: {
+                id: true,
+                nombre: true,
+                grado: { select: { id: true, nombre: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  if (!estudiante) throw ApiError.notFound("Estudiante no encontrado");
+  if (estudiante.rol !== "ESTUDIANTE") {
+    throw ApiError.badRequest("El usuario indicado no es estudiante");
+  }
+
+  // La consulta limita los registros más recientes; la respuesta se ordena
+  // cronológicamente para graficar la evolución sin procesamiento adicional.
+  historial.reverse();
+
+  const porTema = new Map();
+  for (const registro of historial) {
+    const clave = `${registro.asignacionCursoId}:${registro.temaCurricularId ?? registro.tema}`;
+    if (!porTema.has(clave)) {
+      porTema.set(clave, {
+        asignacionCursoId: registro.asignacionCursoId,
+        temaCurricularId: registro.temaCurricularId,
+        tema: registro.tema,
+        puntos: [],
+      });
+    }
+    porTema.get(clave).puntos.push({
+      historialId: registro.id,
+      evaluacionId: registro.evaluacionId,
+      intentoId: registro.intentoId,
+      fecha: registro.fecha,
+      porcentaje: registro.porcentaje,
+      nota: registro.nota,
+      nivelAntes: registro.nivelAntes,
+      nivelDespues: registro.nivelDespues,
+    });
+  }
+
+  return {
+    estudiante,
+    filtros: {
+      asignacionCursoId: normalizados.asignacionCursoId,
+      temaCurricularId: normalizados.temaCurricularId,
+      limite: normalizados.limite,
+    },
+    resumenes,
+    historial,
+    evolucionPorTema: [...porTema.values()],
+  };
 };
 
 // Capa de acceso a datos / lógica de negocio para ProgresoEstudiante.
@@ -240,7 +440,7 @@ const progresoService = {
     const nivel = determinarNivel(promedioPorcentaje);
 
     const temasDominados = progresos
-      .filter((p) => p.porcentajeDominio >= UMBRAL_DOMINIO)
+      .filter((p) => esTemaDominado(p.porcentajeDominio))
       .map((p) => ({
         tema: p.tema,
         porcentajeDominio: redondear(p.porcentajeDominio),
@@ -248,7 +448,7 @@ const progresoService = {
       }));
 
     const temasPorReforzar = progresos
-      .filter((p) => p.porcentajeDominio < UMBRAL_DOMINIO)
+      .filter((p) => !esTemaDominado(p.porcentajeDominio))
       .sort((a, b) => a.porcentajeDominio - b.porcentajeDominio)
       .map((p) => ({
         tema: p.tema,
@@ -292,8 +492,11 @@ const progresoService = {
     ];
 
     const resultado = {
+      // Compatibilidad visual: este nivel general es solo referencial. El perfil
+      // de aprendizaje formal se encuentra en nivelesPorTema/porTema.
       nivelActual: nivel,
       nivelLabel: NIVEL_LABEL[nivel],
+      nivelGeneralReferencial: nivel,
       promedioPorcentaje,
       promedioNota,
       evaluacionesRealizadas,
@@ -303,6 +506,15 @@ const progresoService = {
       recomendacionDetalle,
       evolucion,
       historial,
+      nivelesPorTema: progresos.map((p) => ({
+        asignacionCursoId: p.asignacionCursoId,
+        temaCurricularId: p.temaCurricularId,
+        tema: p.tema,
+        nivelActual: p.nivelActual,
+        porcentajeDominio: redondear(p.porcentajeDominio),
+        cantidadEvaluaciones: p.cantidadEvaluaciones ?? 0,
+        ultimaActualizacion: p.ultimaActualizacion,
+      })),
     };
 
     if (cursoIdNum) {
@@ -311,6 +523,39 @@ const progresoService = {
     }
 
     return resultado;
+  },
+
+  async obtenerMiEvolucion(estudianteId, filtros) {
+    const normalizados = construirFiltrosHistorial(filtros);
+    if (normalizados.asignacionCursoId) {
+      const asignacion = await obtenerAsignacion(normalizados.asignacionCursoId);
+      await verificarEstudianteEnAsignacion(estudianteId, asignacion);
+    }
+    return consultarEvolucion(estudianteId, filtros);
+  },
+
+  async obtenerEvolucionDocente(docenteId, asignacionCursoId, estudianteId, filtros) {
+    const asignacionId = enteroPositivo(
+      asignacionCursoId,
+      "asignacionCursoId",
+      { opcional: false },
+    );
+    const estudianteIdNum = enteroPositivo(estudianteId, "estudianteId", {
+      opcional: false,
+    });
+    const asignacion = await obtenerAsignacion(asignacionId);
+    if (asignacion.docenteId !== docenteId) {
+      throw ApiError.forbidden("No tienes acceso a esta asignación académica");
+    }
+    await verificarEstudianteEnAsignacion(estudianteIdNum, asignacion);
+    return consultarEvolucion(estudianteIdNum, {
+      ...filtros,
+      asignacionCursoId: asignacionId,
+    });
+  },
+
+  async obtenerEvolucionAdmin(estudianteId, filtros) {
+    return consultarEvolucion(estudianteId, filtros);
   },
 };
 

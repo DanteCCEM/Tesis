@@ -1,6 +1,10 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
-const { determinarNivel, UMBRALES } = require("./adaptiveLearningService");
+const {
+  determinarNivel,
+  porcentajeANota20: aNota20,
+  UMBRALES,
+} = require("../config/learningRules");
 const {
   verificarDocenteCurso,
   verificarEstudianteCurso,
@@ -14,8 +18,6 @@ const NIVEL_LABEL = {
 };
 const ESTADO_LABEL = { BORRADOR: "Borrador", PUBLICADA: "Publicada", CERRADA: "Cerrada" };
 const redondear = (valor) => Math.round(valor * 100) / 100;
-const aNota20 = (porcentaje) => Math.round((porcentaje / 5) * 10) / 10;
-
 const incluirAsignacion = {
   areaCurricular: true,
   anioAcademico: true,

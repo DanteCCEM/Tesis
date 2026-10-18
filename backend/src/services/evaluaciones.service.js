@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { Prisma } = require("../generated/prisma");
+const { porcentajeANota20 } = require("../config/learningRules");
 const ApiError = require("../utils/ApiError");
 const planCurricularService = require("./planCurricular.service");
 const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
@@ -364,6 +365,14 @@ const evaluacionesService = {
   // Elimina una evaluación propia (preguntas en cascada por el schema).
   async eliminar(evaluacionId, docenteId) {
     await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const registrosHistoricos = await prisma.historialProgreso.count({
+      where: { evaluacionId },
+    });
+    if (registrosHistoricos > 0) {
+      throw ApiError.conflict(
+        "No se puede eliminar una evaluación con historial de aprendizaje",
+      );
+    }
     await prisma.evaluacion.delete({ where: { id: evaluacionId } });
   },
 
@@ -406,7 +415,6 @@ const evaluacionesService = {
     ]);
 
     const redondear = (valor) => Math.round(valor * 100) / 100;
-    const aNota20 = (porcentaje) => Math.round((porcentaje / 5) * 10) / 10;
 
     const intentosFinalizados = intentos.length;
     const promedioPorcentaje =
@@ -418,7 +426,7 @@ const evaluacionesService = {
         : 0;
 
     const estudiantes = intentos.map((it) => {
-      const nota = aNota20(it.porcentaje);
+      const nota = porcentajeANota20(it.porcentaje);
       const temasFallados = [
         ...new Set(
           it.respuestas
@@ -528,7 +536,7 @@ const evaluacionesService = {
         intentosFinalizados,
         pendientes: Math.max(0, estudiantesMatriculados - intentosFinalizados),
         promedioPorcentaje,
-        promedioNota: aNota20(promedioPorcentaje),
+        promedioNota: porcentajeANota20(promedioPorcentaje),
         aprobados,
         reprobados,
         porcentajeAprobacion,

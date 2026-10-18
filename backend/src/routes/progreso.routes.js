@@ -15,4 +15,22 @@ router.get(
   progresoController.miProgreso,
 );
 
+router.get(
+  "/evolucion",
+  autorizarRoles("ESTUDIANTE"),
+  progresoController.miEvolucion,
+);
+
+router.get(
+  "/docente/asignaciones/:asignacionCursoId/estudiantes/:estudianteId/evolucion",
+  autorizarRoles("DOCENTE"),
+  progresoController.evolucionDocente,
+);
+
+router.get(
+  "/admin/estudiantes/:estudianteId/evolucion",
+  autorizarRoles("ADMIN"),
+  progresoController.evolucionAdmin,
+);
+
 module.exports = router;
