@@ -77,6 +77,18 @@ const evaluacionesController = {
     res.status(200).json({ ok: true, evaluacion });
   }),
 
+  cerrar: asyncHandler(async (req, res) => {
+    const evaluacionId = parseId(req.params.id, "id de la evaluación");
+    const evaluacion = await evaluacionesService.cerrar(evaluacionId, req.usuario.id);
+    res.status(200).json({ ok: true, evaluacion });
+  }),
+
+  archivar: asyncHandler(async (req, res) => {
+    const evaluacionId = parseId(req.params.id, "id de la evaluación");
+    const evaluacion = await evaluacionesService.archivar(evaluacionId, req.usuario.id);
+    res.status(200).json({ ok: true, evaluacion });
+  }),
+
   // PUT /api/evaluaciones/:id (solo DOCENTE propietario)
   actualizar: asyncHandler(async (req, res) => {
     const evaluacionId = parseId(req.params.id, "id de la evaluación");

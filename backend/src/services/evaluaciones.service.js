@@ -7,6 +7,7 @@ const {
 const ApiError = require("../utils/ApiError");
 const planCurricularService = require("./planCurricular.service");
 const { verificarDocenteCurso, verificarEstudianteCurso } = require("./accesoAcademico.service");
+const { validarTransicion, tieneCambiosEstructurales } = require("../config/evaluationStateRules");
 
 // Verifica que el curso exista y pertenezca al docente indicado.
 const verificarCursoPropio = async (cursoId, docenteId) => {
@@ -157,6 +158,9 @@ const evaluacionesService = {
     // REGULAR mantiene compatibles clientes anteriores. La UI nueva envía el tipo explícito.
     const tipoEvaluacion = datos.tipoEvaluacion ?? "REGULAR";
     const esAdaptativa = tiposAdaptativos.has(tipoEvaluacion);
+    if (datos.estado !== undefined && datos.estado !== "BORRADOR") {
+      throw ApiError.badRequest("Una evaluación nueva debe crearse en BORRADOR y publicarse mediante su transición");
+    }
 
     const refs = await planCurricularService.validarReferenciasEvaluacion(
       cursoId,
@@ -195,7 +199,15 @@ const evaluacionesService = {
 
   // Agrega una pregunta (con alternativas/respuesta) a una evaluación propia.
   async agregarPregunta(evaluacionId, docenteId, datos) {
-    await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const intentos = await prisma.intentoEvaluacion.count({ where: { evaluacionId } });
+    if (
+      evaluacion.estado === "CERRADA" ||
+      evaluacion.estado === "ARCHIVADA" ||
+      (evaluacion.estado === "PUBLICADA" && intentos > 0)
+    ) {
+      throw ApiError.conflict("No se pueden modificar preguntas después de iniciar intentos");
+    }
 
     const generadaPorIA = datos.generadaPorIA === true;
     const revisadaPorDocente =
@@ -379,6 +391,13 @@ const evaluacionesService = {
   // Edita una evaluación propia (campos parciales).
   async actualizar(evaluacionId, docenteId, datos) {
     const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const intentos = await prisma.intentoEvaluacion.count({ where: { evaluacionId } });
+    if (evaluacion.estado === "ARCHIVADA" || evaluacion.estado === "CERRADA") {
+      throw ApiError.conflict("La evaluación es de solo consulta y no admite cambios");
+    }
+    if (evaluacion.estado === "PUBLICADA" && intentos > 0 && tieneCambiosEstructurales(datos)) {
+      throw ApiError.conflict("Una evaluación publicada con intentos no admite cambios estructurales");
+    }
 
     const data = {};
     if (datos.titulo !== undefined) data.titulo = String(datos.titulo).trim();
@@ -388,7 +407,14 @@ const evaluacionesService = {
     }
     const nivel = datos.dificultad ?? datos.nivelDificultad;
     if (nivel !== undefined) data.nivelDificultad = nivel;
-    if (datos.estado !== undefined) data.estado = datos.estado;
+    if (datos.estado !== undefined) {
+      try {
+        validarTransicion(evaluacion.estado, datos.estado);
+      } catch (error) {
+        throw ApiError.conflict(error.message);
+      }
+      data.estado = datos.estado;
+    }
     if (datos.fechaLimite !== undefined) {
       data.fechaLimite = datos.fechaLimite ? new Date(datos.fechaLimite) : null;
     }
@@ -447,6 +473,11 @@ const evaluacionesService = {
   // Publica una evaluación propia.
   async publicar(evaluacionId, docenteId) {
     const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    try {
+      validarTransicion(evaluacion.estado, "PUBLICADA");
+    } catch (error) {
+      throw ApiError.conflict(error.message);
+    }
     const pendientesRevision = await prisma.pregunta.count({
       where: {
         evaluacionId,
@@ -488,17 +519,50 @@ const evaluacionesService = {
   },
 
   // Elimina una evaluación propia (preguntas en cascada por el schema).
+  async cerrar(evaluacionId, docenteId) {
+    const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    try {
+      validarTransicion(evaluacion.estado, "CERRADA");
+    } catch (error) {
+      throw ApiError.conflict(error.message);
+    }
+    return prisma.evaluacion.update({ where: { id: evaluacionId }, data: { estado: "CERRADA" } });
+  },
+
+  async archivar(evaluacionId, docenteId) {
+    const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    try {
+      validarTransicion(evaluacion.estado, "ARCHIVADA");
+    } catch (error) {
+      throw ApiError.conflict(error.message);
+    }
+    return prisma.evaluacion.update({ where: { id: evaluacionId }, data: { estado: "ARCHIVADA" } });
+  },
+
   async eliminar(evaluacionId, docenteId) {
-    await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    if (evaluacion.estado === "ARCHIVADA") {
+      throw ApiError.conflict("Una evaluación archivada es solo de consulta y no se elimina");
+    }
+    const intentos = await prisma.intentoEvaluacion.count({ where: { evaluacionId } });
+    if (intentos > 0) {
+      await this.archivar(evaluacionId, docenteId);
+      return { archivada: true, evaluacionId };
+    }
     const registrosHistoricos = await prisma.historialProgreso.count({
       where: { evaluacionId },
     });
+    if (registrosHistoricos > 0) {
+      await this.archivar(evaluacionId, docenteId);
+      return { archivada: true, evaluacionId };
+    }
     if (registrosHistoricos > 0) {
       throw ApiError.conflict(
         "No se puede eliminar una evaluación con historial de aprendizaje",
       );
     }
     await prisma.evaluacion.delete({ where: { id: evaluacionId } });
+    return { archivada: false, evaluacionId: evaluacion.id };
   },
 
   // Analítica agregada del aula para una evaluación (solo docente propietario).

@@ -1,7 +1,7 @@
 const ApiError = require("../utils/ApiError");
 
 const NIVELES = ["BASICO", "INTERMEDIO", "AVANZADO"];
-const ESTADOS = ["BORRADOR", "PUBLICADA", "CERRADA"];
+const ESTADOS = ["BORRADOR", "PUBLICADA", "CERRADA", "ARCHIVADA"];
 const TIPOS_EVALUACION = [
   "REGULAR",
   "DIAGNOSTICA",

@@ -46,6 +46,18 @@ router.put(
   evaluacionesController.publicar,
 );
 
+router.put(
+  "/:id/cerrar",
+  autorizarRoles("DOCENTE"),
+  evaluacionesController.cerrar,
+);
+
+router.put(
+  "/:id/archivar",
+  autorizarRoles("DOCENTE"),
+  evaluacionesController.archivar,
+);
+
 // Analítica del aula por evaluación (solo DOCENTE propietario).
 router.get(
   "/:id/analitica",

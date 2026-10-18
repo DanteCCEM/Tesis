@@ -36,6 +36,7 @@ enum EstadoEvaluacion {
   BORRADOR
   PUBLICADA
   CERRADA
+  ARCHIVADA
 }
 
 enum TipoEvaluacion {

@@ -7,6 +7,7 @@ const {
   determinarNivel,
   porcentajeANota20,
 } = require("../config/learningRules");
+const { puedeCrearIntento, puedeContinuarIntento } = require("../config/evaluationStateRules");
 
 const usuarioPublico = { id: true, username: true, nombres: true, correo: true };
 
@@ -254,7 +255,7 @@ const intentosService = {
       if (evaluacion.estudianteObjetivoId !== usuario.id) {
         throw ApiError.forbidden("Esta práctica adaptativa no está disponible para ti");
       }
-    } else if (evaluacion.estado !== "PUBLICADA") {
+    } else if (false) {
       throw ApiError.forbidden("Esta evaluación no está disponible");
     }
 
@@ -272,6 +273,21 @@ const intentosService = {
       throw ApiError.conflict(
         "Ya realizaste esta evaluación. No puedes volver a intentarla.",
       );
+    }
+
+    if (intento?.estado === "EN_PROGRESO") {
+      if (!puedeContinuarIntento({ estado: evaluacion.estado, intentoExistente: intento })) {
+        throw ApiError.forbidden("Esta evaluación ya no admite continuar intentos");
+      }
+    } else if (!puedeCrearIntento({
+      estado: evaluacion.estado,
+      fechaLimite: evaluacion.fechaLimite,
+      intentoExistente: intento,
+    })) {
+      if (evaluacion.fechaLimite && new Date(evaluacion.fechaLimite) < new Date()) {
+        throw ApiError.forbidden("La fecha límite de esta evaluación ya venció");
+      }
+      throw ApiError.forbidden("Esta evaluación no está disponible para iniciar");
     }
 
     if (!intento) {
