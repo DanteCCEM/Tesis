@@ -107,6 +107,15 @@ const evaluacionesService = {
   async agregarPregunta(evaluacionId, docenteId, datos) {
     await verificarEvaluacionPropia(evaluacionId, docenteId);
 
+    const generadaPorIA = datos.generadaPorIA === true;
+    const revisadaPorDocente =
+      generadaPorIA && datos.revisadaPorDocente === true;
+    const fechaGeneracion = generadaPorIA
+      ? datos.fechaGeneracion
+        ? new Date(datos.fechaGeneracion)
+        : new Date()
+      : null;
+
     const base = {
       enunciado: String(datos.enunciado).trim(),
       tipo: datos.tipo,
@@ -114,6 +123,11 @@ const evaluacionesService = {
       tema: String(datos.tema).trim(),
       puntaje: datos.puntaje !== undefined ? Number(datos.puntaje) : 1,
       evaluacionId,
+      generadaPorIA,
+      fechaGeneracion,
+      modeloGeneracion: generadaPorIA ? datos.modeloGeneracion ?? null : null,
+      revisadaPorDocente,
+      fechaRevision: revisadaPorDocente ? new Date() : null,
     };
 
     if (datos.tipo === "OPCION_MULTIPLE") {
@@ -342,6 +356,18 @@ const evaluacionesService = {
   // Publica una evaluación propia.
   async publicar(evaluacionId, docenteId) {
     const evaluacion = await verificarEvaluacionPropia(evaluacionId, docenteId);
+    const pendientesRevision = await prisma.pregunta.count({
+      where: {
+        evaluacionId,
+        generadaPorIA: true,
+        revisadaPorDocente: false,
+      },
+    });
+    if (pendientesRevision > 0) {
+      throw ApiError.conflict(
+        `No se puede publicar: ${pendientesRevision} pregunta(s) generada(s) por IA aún no fueron revisadas por el docente`,
+      );
+    }
     if (evaluacion.tipoEvaluacion === "FORMATIVA_ADAPTATIVA") {
       const configuracion = normalizarConfiguracionAdaptativa(
         evaluacion.configuracionAdaptativa,

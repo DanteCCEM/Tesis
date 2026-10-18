@@ -1,11 +1,17 @@
 const { GoogleGenAI } = require("@google/genai");
 const ApiError = require("../utils/ApiError");
+const {
+  NIVELES: NIVELES_ADAPTATIVOS,
+  normalizarConfiguracionAdaptativa,
+} = require("../config/adaptiveEvaluationRules");
 
 const NIVELES = ["BASICO", "INTERMEDIO", "AVANZADO"];
 const TIPOS_PREGUNTA = ["OPCION_MULTIPLE", "VERDADERO_FALSO", "RESPUESTA_CORTA"];
 
+// Flash-Lite es suficiente para borradores estructurados y reduce coste/latencia.
+// Se deja un único modelo por defecto para no duplicar llamadas ante un fallo.
 const MODELO_DEFECTO = "gemini-3.5-flash-lite";
-const MODELOS_FALLBACK_DEFECTO = "gemini-3.5-flash-lite";
+const MODELOS_FALLBACK_DEFECTO = "";
 
 let geminiClient = null;
 let geminiClientKey = null;
@@ -40,8 +46,8 @@ const obtenerModelos = () => {
 };
 
 const maxReintentos = () => {
-  const valor = Number(process.env.GEMINI_RETRY_MAX ?? 3);
-  return Number.isInteger(valor) && valor >= 0 ? valor : 3;
+  const valor = Number(process.env.GEMINI_RETRY_MAX ?? 0);
+  return Number.isInteger(valor) && valor >= 0 ? valor : 0;
 };
 
 const baseReintentoMs = () => {
@@ -480,6 +486,98 @@ const validarPreguntaGenerada = (pregunta, index) => {
   };
 };
 
+const validarDistribucionGenerada = (preguntas, distribucion, nivel) => {
+  const real = Object.fromEntries(
+    NIVELES_ADAPTATIVOS.map((dificultad) => [
+      dificultad,
+      preguntas.filter((pregunta) => pregunta.dificultad === dificultad).length,
+    ]),
+  );
+  for (const dificultad of NIVELES_ADAPTATIVOS) {
+    if (real[dificultad] !== Number(distribucion[dificultad] ?? 0)) {
+      throw ApiError.serviceUnavailable(
+        `La variante ${nivel} no pudo validarse: la distribución de dificultad no coincide`,
+      );
+    }
+  }
+  return real;
+};
+
+const generarPreguntasConEspecificacion = async ({
+  areaCurricular,
+  curso,
+  grado,
+  tema,
+  subtema,
+  nivel,
+  cantidadPreguntas,
+  distribucion,
+  criterios,
+  tiposPregunta,
+}) => {
+  const tipos = tiposPregunta.join(", ");
+  const system = [
+    "Eres un asistente pedagógico para docentes de secundaria en EvaluaIA.",
+    "Genera contenido educativo en español, claro y apropiado para adolescentes.",
+    "La IA no decide niveles, notas ni aprobación: solo redacta preguntas según la especificación recibida.",
+    "No inventes preguntas genéricas si no puedes cumplir exactamente el formato.",
+    "Responde ÚNICAMENTE con JSON válido según el esquema solicitado.",
+  ].join(" ");
+  const user = JSON.stringify({
+    especificacion: {
+      areaCurricular,
+      curso,
+      grado,
+      tema,
+      subtema,
+      nivel,
+      cantidadPreguntas,
+      distribucion,
+      criterios,
+      tiposPermitidos: tiposPregunta,
+      idioma: "español",
+    },
+    esquema: {
+      preguntas: [{
+        enunciado: "string",
+        tipo: "OPCION_MULTIPLE | VERDADERO_FALSO | RESPUESTA_CORTA",
+        alternativas: "arreglo de { texto, esCorrecta }; vacío solo para RESPUESTA_CORTA",
+        respuestaCorrecta: "string",
+        explicacion: "string",
+        dificultad: "BASICO | INTERMEDIO | AVANZADO",
+        tema: "string",
+        subtema: "string",
+        puntaje: "número positivo",
+      }],
+    },
+    reglas: [
+      `Genera exactamente ${cantidadPreguntas} preguntas.`,
+      `La distribución exacta debe ser BASICO=${distribucion.BASICO}, INTERMEDIO=${distribucion.INTERMEDIO}, AVANZADO=${distribucion.AVANZADO}.`,
+      `Todas las preguntas deben pertenecer a la variante ${nivel}, pero su campo dificultad debe respetar la distribución exacta.`,
+      `Usa solamente estos tipos: ${tipos}.`,
+      "Cada pregunta debe tener una sola respuesta correcta y puntaje positivo.",
+      "No incluyas texto fuera del JSON.",
+    ],
+  });
+
+  const raw = await invocarJson({ system, user, temperature: 0.35 });
+  if (!Array.isArray(raw.preguntas) || raw.preguntas.length !== cantidadPreguntas) {
+    throw ApiError.serviceUnavailable(
+      `La variante ${nivel} no pudo validarse: cantidad de preguntas incorrecta`,
+    );
+  }
+  const preguntas = raw.preguntas.map((pregunta, index) =>
+    validarPreguntaGenerada(pregunta, index),
+  );
+  const distribucionReal = validarDistribucionGenerada(
+    preguntas,
+    distribucion,
+    nivel,
+  );
+
+  return { preguntas, distribucionReal };
+};
+
 const validarRetroalimentacionGenerada = (payload) => {
   if (!payload || typeof payload !== "object") {
     throw ApiError.serviceUnavailable("Respuesta IA inválida: formato incorrecto");
@@ -635,6 +733,86 @@ const validarEstructuraCurricularGenerada = (payload) => {
 };
 
 const aiService = {
+  async generarVariantesPreguntasBorrador({
+    areaCurricular,
+    curso,
+    grado,
+    tema,
+    subtema,
+    criterios,
+    tiposPregunta,
+    configuracionAdaptativa,
+  }) {
+    const configuracion = normalizarConfiguracionAdaptativa(
+      configuracionAdaptativa,
+    );
+    const modelo = obtenerModelos()[0] ?? null;
+    const variantes = [];
+    let falloGlobal = null;
+
+    // Se procesan secuencialmente para evitar tres ráfagas simultáneas contra
+    // la cuota del proyecto y para poder reportar cada variante por separado.
+    for (const nivel of NIVELES_ADAPTATIVOS) {
+      const regla = configuracion.porNivel[nivel];
+      if (falloGlobal) {
+        variantes.push({
+          nivel,
+          estado: "NO_GENERADA",
+          cantidadPreguntas: regla.cantidadPreguntas,
+          distribucionObjetivo: regla.distribucion,
+          generadaPorIA: true,
+          fechaGeneracion: new Date().toISOString(),
+          modelo,
+          error: falloGlobal,
+        });
+        continue;
+      }
+      try {
+        const resultado = await generarPreguntasConEspecificacion({
+          areaCurricular,
+          curso,
+          grado,
+          tema,
+          subtema,
+          nivel,
+          cantidadPreguntas: regla.cantidadPreguntas,
+          distribucion: regla.distribucion,
+          criterios,
+          tiposPregunta,
+        });
+        variantes.push({
+          nivel,
+          estado: "GENERADA",
+          cantidadPreguntas: regla.cantidadPreguntas,
+          distribucionObjetivo: regla.distribucion,
+          distribucionReal: resultado.distribucionReal,
+          preguntas: resultado.preguntas,
+          generadaPorIA: true,
+          fechaGeneracion: new Date().toISOString(),
+          modelo,
+        });
+      } catch (error) {
+        if ([401, 403, 429, 503].includes(error?.statusCode)) {
+          falloGlobal = error.message;
+        }
+        variantes.push({
+          nivel,
+          estado: "NO_GENERADA",
+          cantidadPreguntas: regla.cantidadPreguntas,
+          distribucionObjetivo: regla.distribucion,
+          generadaPorIA: true,
+          fechaGeneracion: new Date().toISOString(),
+          modelo,
+          error: error instanceof ApiError
+            ? error.message
+            : "La variante no pudo generarse ni validarse",
+        });
+      }
+    }
+
+    return { variantes, modelo };
+  },
+
   async generarPreguntasBorrador({
     curso,
     grado,
@@ -705,6 +883,7 @@ const aiService = {
 
     return {
       borrador: true,
+      modelo: obtenerModelos()[0] ?? null,
       meta: {
         curso,
         grado,

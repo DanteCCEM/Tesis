@@ -2,6 +2,7 @@ const ApiError = require("../utils/ApiError");
 
 const NIVELES = ["BASICO", "INTERMEDIO", "AVANZADO"];
 const TIPOS_PREGUNTA = ["OPCION_MULTIPLE", "VERDADERO_FALSO", "RESPUESTA_CORTA"];
+const CONFIG_NIVELES = ["BASICO", "INTERMEDIO", "AVANZADO"];
 
 const esEnteroPositivo = (valor) =>
   Number.isInteger(Number(valor)) && Number(valor) > 0;
@@ -67,6 +68,49 @@ const validarGenerarPreguntas = (req, res, next) => {
   next();
 };
 
+const validarGenerarVariantes = (req, res, next) => {
+  const {
+    cursoId,
+    tema,
+    subtema,
+    criterios,
+    tiposPregunta,
+    configuracionAdaptativa,
+  } = req.body ?? {};
+  const errores = [];
+  if (!esEnteroPositivo(cursoId)) errores.push("cursoId es obligatorio");
+  if (!tema || !String(tema).trim()) errores.push("tema es obligatorio");
+  if (!subtema || !String(subtema).trim()) errores.push("subtema es obligatorio");
+  if (!criterios || !String(criterios).trim()) errores.push("criterios es obligatorio");
+  if (!Array.isArray(tiposPregunta) || tiposPregunta.length === 0) {
+    errores.push("tiposPregunta debe ser un arreglo no vacío");
+  } else if (tiposPregunta.some((tipo) => !TIPOS_PREGUNTA.includes(tipo))) {
+    errores.push("tiposPregunta contiene un tipo inválido");
+  }
+  if (!configuracionAdaptativa || typeof configuracionAdaptativa !== "object") {
+    errores.push("configuracionAdaptativa es obligatoria");
+  } else {
+    const cantidades = configuracionAdaptativa.cantidadPorNivel;
+    const porNivel = configuracionAdaptativa.porNivel;
+    for (const nivel of CONFIG_NIVELES) {
+      const cantidad = cantidades?.[nivel] ?? porNivel?.[nivel]?.cantidadPreguntas;
+      if (!Number.isInteger(Number(cantidad)) || Number(cantidad) < 1 || Number(cantidad) > 20) {
+        errores.push(`cantidad de ${nivel} debe ser un entero entre 1 y 20`);
+      }
+    }
+  }
+  if (errores.length > 0) return next(ApiError.badRequest(errores.join("; ")));
+  req.body = {
+    cursoId: Number(cursoId),
+    tema: String(tema).trim(),
+    subtema: String(subtema).trim(),
+    criterios: String(criterios).trim(),
+    tiposPregunta: [...new Set(tiposPregunta)],
+    configuracionAdaptativa,
+  };
+  next();
+};
+
 const validarGenerarRetroalimentacion = (req, res, next) => {
   const {
     intentoId,
@@ -125,5 +169,6 @@ const validarGenerarRetroalimentacion = (req, res, next) => {
 
 module.exports = {
   validarGenerarPreguntas,
+  validarGenerarVariantes,
   validarGenerarRetroalimentacion,
 };

@@ -57,6 +57,22 @@ el nivel al rendir, la dificultad de variante y la cantidad. La mezcla es una
 meta: si faltan preguntas de una dificultad, el motor completa la cantidad con
 el banco disponible y registra tanto la distribución objetivo como la real.
 
+## Generación de variantes con IA
+
+En una `FORMATIVA_ADAPTATIVA`, el docente puede solicitar tres borradores desde
+`POST /api/ia/generar-variantes`. El backend obtiene el área y grado de la
+asignación, calcula las cantidades y distribuciones desde las reglas y realiza
+una solicitud por variante. Gemini recibe el nivel y la distribución, pero no
+puede decidir el nivel del estudiante ni la nota.
+
+Cada respuesta se valida antes de llegar al editor: cantidad exacta, dificultad,
+tipo, alternativas, única respuesta correcta, puntaje, tema y subtema. Una
+variante que falla queda marcada como `NO_GENERADA`; no se reemplaza con
+contenido simulado. El docente revisa las variantes agrupadas en la interfaz y
+solo al guardar/publicar se persisten las preguntas. Las preguntas guardan
+`generadaPorIA`, `fechaGeneracion`, `modeloGeneracion`, `revisadaPorDocente` y
+`fechaRevision`. Publicar bloquea cualquier pregunta IA que no tenga revisión.
+
 El porcentaje siempre se calcula como `puntaje obtenido / puntaje máximo × 100`
 y la nota se convierte a escala 0–20. Los reportes agrupan las formativas por
 variante y no producen un promedio único entre variantes básicas, intermedias y

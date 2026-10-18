@@ -22,7 +22,7 @@ const EVALUATION_TYPES = [
   {
     value: 'FORMATIVA_ADAPTATIVA',
     label: 'Formativa adaptativa',
-    description: 'Guarda criterios y cantidades por nivel para la futura asignación personalizada.',
+    description: 'Genera tres variantes revisables. Cada estudiante recibirá la variante de su nivel actual.',
   },
   {
     value: 'FINAL',
@@ -121,7 +121,7 @@ function makeBlankQuestion(type, { difficulty = 'INTERMEDIO', puntaje = 1 } = {}
   }
 }
 
-function mapAiQuestionToEditor(pregunta) {
+function mapAiQuestionToEditor(pregunta, metadata = {}) {
   const type = frontendTypeFromBackend(pregunta.tipo)
 
   if (type === 'short') {
@@ -136,6 +136,8 @@ function mapAiQuestionToEditor(pregunta) {
       puntaje: pregunta.puntaje ?? 1,
       explicacion: pregunta.explicacion ?? '',
       generatedByIA: true,
+      variantLevel: metadata.variantLevel,
+      generationMeta: metadata.generationMeta,
     }
   }
 
@@ -167,6 +169,8 @@ function mapAiQuestionToEditor(pregunta) {
     puntaje: pregunta.puntaje ?? 1,
     explicacion: pregunta.explicacion ?? '',
     generatedByIA: true,
+    variantLevel: metadata.variantLevel,
+    generationMeta: metadata.generationMeta,
   }
 }
 
@@ -210,6 +214,10 @@ function buildQuestionPayload(q, { tema, dificultadDefault }) {
     tema,
     dificultad: q.difficulty || dificultadDefault,
     puntaje: Number(q.puntaje) || 1,
+    generadaPorIA: q.generatedByIA === true,
+    revisadaPorDocente: q.generatedByIA === true,
+    fechaGeneracion: q.generationMeta?.fechaGeneracion,
+    modeloGeneracion: q.generationMeta?.modelo,
   }
 
   if (q.type === 'short') {
@@ -246,6 +254,7 @@ function CrearEvaluacion() {
   const [bannerError, setBannerError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [generatingIA, setGeneratingIA] = useState(false)
+  const [adaptiveVariants, setAdaptiveVariants] = useState([])
 
   const [planActivo, setPlanActivo] = useState(null)
   const [loadingPlan, setLoadingPlan] = useState(false)
@@ -500,26 +509,76 @@ function CrearEvaluacion() {
     setGeneratingIA(true)
 
     try {
-      const respuesta = await iaService.generarPreguntas({
-        curso: curso.nombre,
-        grado: curso.grado,
-        tema: form.topic.trim(),
-        subtema: form.subtopic.trim() || form.topic.trim(),
-        dificultad: form.difficulty,
-        cantidadPreguntas: Number(form.amount),
-        tiposPregunta: form.tiposPregunta,
-      })
+      if (isAdaptive) {
+        const respuesta = await iaService.generarVariantes({
+          cursoId: Number(form.course),
+          tema: form.topic.trim(),
+          subtema: form.subtopic.trim() || form.topic.trim(),
+          criterios: form.adaptiveCriteria.trim(),
+          tiposPregunta: form.tiposPregunta,
+          configuracionAdaptativa: {
+            criterios: form.adaptiveCriteria.trim(),
+            cantidadPorNivel: {
+              BASICO: Number(form.adaptiveBasicAmount),
+              INTERMEDIO: Number(form.adaptiveIntermediateAmount),
+              AVANZADO: Number(form.adaptiveAdvancedAmount),
+            },
+          },
+        })
+        const variantes = respuesta.variantes ?? []
+        const generadas = variantes.flatMap((variante) =>
+          (variante.preguntas ?? []).map((pregunta) =>
+            mapAiQuestionToEditor(pregunta, {
+              variantLevel: variante.nivel,
+              generationMeta: {
+                fechaGeneracion: variante.fechaGeneracion,
+                modelo: variante.modelo,
+              },
+            }),
+          ),
+        )
+        setAdaptiveVariants(variantes)
+        setQuestions(generadas)
+        const fallidas = variantes.filter((variante) => variante.estado !== 'GENERADA')
+        if (fallidas.length > 0) {
+          setBannerError(
+            `No se pudieron generar o validar las variantes: ${fallidas.map((item) => item.nivel).join(', ')}. No se creó contenido simulado; revisa o genera nuevamente.`,
+          )
+        }
+        if (generadas.length > 0) {
+          setBanner(
+            `Se prepararon ${generadas.length} pregunta(s) en ${variantes.filter((item) => item.estado === 'GENERADA').length} variante(s). Revisa cada variante antes de guardar o publicar.`,
+          )
+        }
+      } else {
+        const respuesta = await iaService.generarPreguntas({
+          curso: curso.nombre,
+          grado: curso.grado,
+          tema: form.topic.trim(),
+          subtema: form.subtopic.trim() || form.topic.trim(),
+          dificultad: form.difficulty,
+          cantidadPreguntas: Number(form.amount),
+          tiposPregunta: form.tiposPregunta,
+        })
 
-      const generadas = (respuesta.preguntas ?? []).map(mapAiQuestionToEditor)
-      if (generadas.length === 0) {
-        setBannerError('La IA no devolvió preguntas. Intenta de nuevo.')
-        return
+        const generadas = (respuesta.preguntas ?? []).map((pregunta) =>
+          mapAiQuestionToEditor(pregunta, {
+            generationMeta: {
+              fechaGeneracion: new Date().toISOString(),
+              modelo: respuesta.modelo,
+            },
+          }),
+        )
+        if (generadas.length === 0) {
+          setBannerError('La IA no devolvió preguntas. Intenta de nuevo.')
+          return
+        }
+        setAdaptiveVariants([])
+        setQuestions(generadas)
+        setBanner(
+          `Se generaron ${generadas.length} pregunta(s) con IA. Revísalas, edítalas y confirma al guardar o publicar.`,
+        )
       }
-
-      setQuestions(generadas)
-      setBanner(
-        `Se generaron ${generadas.length} pregunta(s) con IA. Revísalas, edítalas y confirma al guardar o publicar.`,
-      )
     } catch (err) {
       const mensaje = err.mensaje || 'No se pudo generar el borrador con IA.'
       if (/no está configurado/i.test(mensaje)) {
@@ -674,6 +733,7 @@ function CrearEvaluacion() {
       )
       setForm(EMPTY_FORM)
       setQuestions([])
+      setAdaptiveVariants([])
       setErrors({})
     } catch (err) {
       setBannerError(err.mensaje || 'No se pudo guardar la evaluación.')
@@ -681,6 +741,19 @@ function CrearEvaluacion() {
       setSubmitting(false)
     }
   }
+
+  const renderQuestion = (question, index) => (
+    <QuestionEditor
+      key={question.id}
+      index={index}
+      question={question}
+      onUpdate={updateQuestion}
+      onUpdateOption={updateOption}
+      onAddOption={addOption}
+      onRemoveOption={removeOption}
+      onRemove={removeQuestion}
+    />
+  )
 
   return (
     <>
@@ -1176,21 +1249,27 @@ function CrearEvaluacion() {
             añade preguntas manualmente.
           </p>
         </div>
-      ) : (
+      ) : isAdaptive && adaptiveVariants.length > 0 ? (
         <div className={styles.questionList}>
-          {questions.map((question, index) => (
-            <QuestionEditor
-              key={question.id}
-              index={index}
-              question={question}
-              onUpdate={updateQuestion}
-              onUpdateOption={updateOption}
-              onAddOption={addOption}
-              onRemoveOption={removeOption}
-              onRemove={removeQuestion}
-            />
-          ))}
+          {adaptiveVariants.map((variante) => {
+            const preguntasVariante = questions.filter(
+              (question) => question.variantLevel === variante.nivel,
+            )
+            return (
+              <section key={variante.nivel}>
+                <h3>{`Variante ${variante.nivel}`}</h3>
+                <p>
+                  {variante.estado === 'GENERADA'
+                    ? `${preguntasVariante.length} preguntas · distribución validada`
+                    : `No disponible: ${variante.error ?? 'contenido no validado'}`}
+                </p>
+                {preguntasVariante.map(renderQuestion)}
+              </section>
+            )
+          })}
         </div>
+      ) : (
+        <div className={styles.questionList}>{questions.map(renderQuestion)}</div>
       )}
 
       {courses.length > 0 && !generatingIA && (

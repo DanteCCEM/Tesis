@@ -4,12 +4,20 @@ const authMiddleware = require("../middlewares/auth.middleware");
 const autorizarRoles = require("../middlewares/role.middleware");
 const {
   validarGenerarPreguntas,
+  validarGenerarVariantes,
   validarGenerarRetroalimentacion,
 } = require("../validators/ia.validator");
 
 const router = Router();
 
 router.use(authMiddleware);
+
+router.post(
+  "/generar-variantes",
+  autorizarRoles("DOCENTE"),
+  validarGenerarVariantes,
+  iaController.generarVariantes,
+);
 
 router.post(
   "/generar-preguntas",

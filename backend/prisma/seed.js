@@ -103,7 +103,78 @@ async function main() {
     });
   }
 
-  // 3) Matrícula del estudiante en el curso
+  // 3) Vincula el demo con la arquitectura académica nueva para que el
+  // docente pueda seleccionar una asignación y usar generación adaptativa.
+  const anioAcademico = await prisma.anioAcademico.upsert({
+    where: { anio: new Date().getFullYear() },
+    update: { estado: "ACTIVO" },
+    create: { anio: new Date().getFullYear(), estado: "ACTIVO" },
+  });
+  const grado = await prisma.grado.upsert({
+    where: { nombre: "5to de secundaria" },
+    update: {},
+    create: { nombre: "5to de secundaria", orden: 5 },
+  });
+  const seccion = await prisma.seccion.upsert({
+    where: { gradoId_nombre: { gradoId: grado.id, nombre: "A" } },
+    update: { estado: "ACTIVO" },
+    create: { gradoId: grado.id, nombre: "A", estado: "ACTIVO" },
+  });
+  const areaCurricular = await prisma.areaCurricular.upsert({
+    where: { nombre: "Matemáticas II" },
+    update: { estado: "ACTIVO" },
+    create: {
+      nombre: "Matemáticas II",
+      descripcion: "Área curricular de demostración",
+      estado: "ACTIVO",
+    },
+  });
+  let asignacion = await prisma.asignacionCurso.findFirst({
+    where: {
+      areaCurricularId: areaCurricular.id,
+      seccionId: seccion.id,
+      anioAcademicoId: anioAcademico.id,
+    },
+  });
+  if (!asignacion) {
+    asignacion = await prisma.asignacionCurso.create({
+      data: {
+        areaCurricularId: areaCurricular.id,
+        seccionId: seccion.id,
+        docenteId: docente.id,
+        anioAcademicoId: anioAcademico.id,
+        estado: "ACTIVO",
+      },
+    });
+  }
+  if (curso.asignacionCursoId !== asignacion.id) {
+    curso = await prisma.curso.update({
+      where: { id: curso.id },
+      data: {
+        asignacionCursoId: asignacion.id,
+        nombre: areaCurricular.nombre,
+        grado: grado.nombre,
+        seccion: seccion.nombre,
+      },
+    });
+  }
+  await prisma.matriculaAcademica.upsert({
+    where: {
+      estudianteId_anioAcademicoId: {
+        estudianteId: estudiante.id,
+        anioAcademicoId: anioAcademico.id,
+      },
+    },
+    update: { seccionId: seccion.id, estado: "ACTIVO" },
+    create: {
+      estudianteId: estudiante.id,
+      seccionId: seccion.id,
+      anioAcademicoId: anioAcademico.id,
+      estado: "ACTIVO",
+    },
+  });
+
+  // 4) Matrícula del estudiante en el curso legacy (compatibilidad)
   await prisma.matricula.upsert({
     where: {
       estudianteId_cursoId: { estudianteId: estudiante.id, cursoId: curso.id },

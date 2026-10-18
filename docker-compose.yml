@@ -35,9 +35,9 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/evaluacion_ia?schema=public
       JWT_SECRET: ${JWT_SECRET:-cambiar-este-secreto-en-produccion}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
-      GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.5-flash,gemini-2.0-flash}
-      GEMINI_RETRY_MAX: ${GEMINI_RETRY_MAX:-3}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-}
+      GEMINI_RETRY_MAX: ${GEMINI_RETRY_MAX:-0}
       GEMINI_RETRY_BASE_MS: ${GEMINI_RETRY_BASE_MS:-1500}
       PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}

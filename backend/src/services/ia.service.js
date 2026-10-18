@@ -92,6 +92,41 @@ const normalizarRetroalimentacionGuardada = (payload) => {
 };
 
 const iaServiceLayer = {
+  async generarVariantesPreguntas(datos, usuario) {
+    const cursoId = Number(datos.cursoId);
+    const curso = await verificarDocenteCurso(cursoId, usuario.id);
+    const asignacion = curso.asignacionCurso;
+    const resultado = await aiService.generarVariantesPreguntasBorrador({
+      areaCurricular: asignacion.areaCurricular.nombre,
+      curso: asignacion.areaCurricular.nombre,
+      grado: asignacion.seccion.grado.nombre,
+      tema: datos.tema,
+      subtema: datos.subtema,
+      criterios: datos.criterios,
+      tiposPregunta: datos.tiposPregunta,
+      configuracionAdaptativa: datos.configuracionAdaptativa,
+    });
+
+    registrarSolicitudIA(usuario, "generar-variantes-preguntas", {
+      cursoId,
+      tema: datos.tema,
+      subtema: datos.subtema,
+      variantes: resultado.variantes.map((variante) => ({
+        nivel: variante.nivel,
+        estado: variante.estado,
+        cantidadPreguntas: variante.cantidadPreguntas,
+      })),
+    });
+
+    return {
+      ok: true,
+      borrador: true,
+      cursoId,
+      configuracionAdaptativa: datos.configuracionAdaptativa,
+      ...resultado,
+    };
+  },
+
   async generarPreguntas(datos, usuario) {
     registrarSolicitudIA(usuario, "generar-preguntas", {
       tema: datos.tema,

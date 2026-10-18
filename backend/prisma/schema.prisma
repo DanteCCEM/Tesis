@@ -344,6 +344,11 @@ model Pregunta {
   tema              String
   respuestaCorrecta String?
   puntaje           Float           @default(1)
+  generadaPorIA     Boolean         @default(false)
+  fechaGeneracion   DateTime?
+  modeloGeneracion  String?
+  revisadaPorDocente Boolean        @default(false)
+  fechaRevision     DateTime?
 
   evaluacionId Int
   evaluacion   Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
