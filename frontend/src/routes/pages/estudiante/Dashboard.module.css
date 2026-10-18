@@ -317,3 +317,26 @@
     grid-template-columns: 1fr;
   }
 }
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th,
+.table td {
+  padding: 11px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ev-border);
+}
+
+.table th {
+  color: var(--ev-text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}

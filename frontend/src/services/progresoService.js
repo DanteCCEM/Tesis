@@ -28,6 +28,10 @@ const progresoService = {
     )
     return data.evolucion
   },
+  async resumenAdmin() {
+    const { data } = await api.get('/progreso/admin/resumen')
+    return data.resumen
+  },
 }
 
 export default progresoService

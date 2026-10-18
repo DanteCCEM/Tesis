@@ -39,6 +39,11 @@ const progresoController = {
     );
     res.status(200).json({ ok: true, evolucion });
   }),
+
+  resumenAdmin: asyncHandler(async (_req, res) => {
+    const resumen = await progresoService.obtenerResumenAdmin();
+    res.status(200).json({ ok: true, resumen });
+  }),
 };
 
 module.exports = progresoController;

@@ -180,6 +180,7 @@ function DocenteDashboard() {
                     <th>Grado / Sección</th>
                     <th>Estudiantes</th>
                     <th>Evaluaciones</th>
+                    <th>Seguimiento</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -191,6 +192,11 @@ function DocenteDashboard() {
                       </td>
                       <td>{course._count?.matriculas ?? 0}</td>
                       <td>{course._count?.evaluaciones ?? 0}</td>
+                      <td>
+                        <Button variant="ghost" size="sm" onClick={() => navigate(`/docente/cursos/${course.id}`)}>
+                          Ver por tema
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

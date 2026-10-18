@@ -227,6 +227,16 @@ function EstudianteDashboard() {
         </Card>
       </div>
 
+      <Card title="Mi nivel por tema" subtitle="Tu progreso se calcula por tema y no se compara con otros estudiantes.">
+        {(progreso?.nivelesPorTema ?? []).length > 0 ? (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}><thead><tr><th>Tema</th><th>Nivel actual</th><th>Dominio</th><th>Evaluaciones</th></tr></thead><tbody>
+              {progreso.nivelesPorTema.slice(0, 8).map((tema) => <tr key={`${tema.asignacionCursoId}-${tema.tema}`}><td>{tema.tema}</td><td>{tema.nivelActual}</td><td>{tema.porcentajeDominio}%</td><td>{tema.cantidadEvaluaciones}</td></tr>)}
+            </tbody></table>
+          </div>
+        ) : <p className={styles.emptyText}>Completa una evaluación para construir tu perfil por tema.</p>}
+      </Card>
+
       <Card title="Recomendaciones para ti" subtitle="Basadas en tu desempeño">
         {recomendaciones.length > 0 ? (
           <div className={styles.recommendList}>

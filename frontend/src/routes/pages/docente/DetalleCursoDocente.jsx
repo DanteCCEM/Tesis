@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button, Card, PageHeader } from '../../../components/index.js'
 import cursosService from '../../../services/cursosService.js'
+import progresoService from '../../../services/progresoService.js'
 import styles from './DetalleCursoDocente.module.css'
 
 const TIPO_EVALUACION_LABEL = {
@@ -50,6 +51,9 @@ function DetalleCursoDocente() {
   const [loading, setLoading] = useState(true)
   const [loadingEstudiantes, setLoadingEstudiantes] = useState(true)
   const [error, setError] = useState('')
+  const [estudianteSeleccionado, setEstudianteSeleccionado] = useState(null)
+  const [perfilAcademico, setPerfilAcademico] = useState(null)
+  const [perfilLoading, setPerfilLoading] = useState(false)
 
   useEffect(() => {
     let cancelado = false
@@ -126,6 +130,15 @@ function DetalleCursoDocente() {
   const evaluaciones = curso.evaluaciones ?? []
   const rendimiento = curso.rendimiento ?? {}
   const cantidadEstudiantes = estudiantes.length
+  const verPerfilAcademico = (estudiante) => {
+    setEstudianteSeleccionado(estudiante)
+    setPerfilLoading(true)
+    progresoService
+      .evolucionEstudianteAsignacion(curso.asignacionCursoId, estudiante.id)
+      .then(setPerfilAcademico)
+      .catch((err) => setPerfilAcademico({ error: err.mensaje || 'No se pudo cargar el historial.' }))
+      .finally(() => setPerfilLoading(false))
+  }
 
   return (
     <>
@@ -260,7 +273,11 @@ function DetalleCursoDocente() {
                         '—'
                       )}
                     </td>
-                    <td />
+                    <td>
+                      <Button variant="ghost" size="sm" onClick={() => verPerfilAcademico(est)}>
+                        Ver seguimiento
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -272,6 +289,40 @@ function DetalleCursoDocente() {
           </p>
         )}
       </Card>
+
+      <Card title="Distribución actual por tema" subtitle="Cantidad de estudiantes según su nivel de dominio registrado.">
+        {(curso.seguimientoPorTema ?? []).length > 0 ? (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead><tr><th>Tema</th><th>Básico</th><th>Intermedio</th><th>Avanzado</th><th>Promedio</th></tr></thead>
+              <tbody>{curso.seguimientoPorTema.map((tema) => (
+                <tr key={tema.tema}><td>{tema.tema}</td><td>{tema.BASICO}</td><td>{tema.INTERMEDIO}</td><td>{tema.AVANZADO}</td><td>{tema.promedioPorcentaje}%</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : <p className={styles.emptyText}>Todavía no hay registros históricos por tema.</p>}
+      </Card>
+
+      {estudianteSeleccionado && (
+        <Card
+          title={`Perfil académico: ${estudianteSeleccionado.nombres}`}
+          subtitle="Evolución cronológica basada en el historial real de aprendizaje."
+          actions={<Button variant="ghost" size="sm" onClick={() => { setEstudianteSeleccionado(null); setPerfilAcademico(null) }}>Cerrar</Button>}
+        >
+          {perfilLoading ? <p className={styles.stateText}>Cargando historial…</p> : perfilAcademico?.error ? <p className={styles.stateText}>{perfilAcademico.error}</p> : (
+            <>
+              <div className={styles.topicTags}>
+                {(perfilAcademico?.resumenes ?? []).map((item) => <span key={item.id} className={styles.topicTag}>{item.tema}: {item.nivelActual} · {Math.round(item.porcentajeDominio)}%</span>)}
+              </div>
+              <div className={styles.tableWrap}>
+                <table className={styles.table}><thead><tr><th>Fecha</th><th>Tema</th><th>Nota</th><th>Porcentaje</th><th>Cambio</th></tr></thead>
+                  <tbody>{(perfilAcademico?.historial ?? []).map((item) => <tr key={item.id}><td>{new Date(item.fecha).toLocaleDateString('es-PE')}</td><td>{item.tema}</td><td>{item.nota}</td><td>{item.porcentaje}%</td><td>{item.nivelAntes} → {item.nivelDespues}</td></tr>)}</tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Card>
+      )}
 
       <div className={styles.columns}>
         <Card title="Evaluaciones del curso">

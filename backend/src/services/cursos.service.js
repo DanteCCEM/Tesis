@@ -77,8 +77,8 @@ const estudiantesSeccion = async (asignacion) => {
   }));
 };
 
-const statsEstudiante = async (estudiante, cursoId) => {
-  const [intentos, progresos] = await Promise.all([
+const statsEstudiante = async (estudiante, cursoId, asignacionCursoId) => {
+  const [intentos, progresos, historial] = await Promise.all([
     prisma.intentoEvaluacion.findMany({
       where: {
         estudianteId: estudiante.id,
@@ -86,46 +86,84 @@ const statsEstudiante = async (estudiante, cursoId) => {
         evaluacion: {
           cursoId,
           esPracticaAdaptativa: false,
-          tipoEvaluacion: { not: "FORMATIVA_ADAPTATIVA" },
         },
       },
       orderBy: { fechaFin: "desc" },
-      include: { evaluacion: { select: { titulo: true } } },
+      include: {
+        evaluacion: { select: { id: true, titulo: true, tema: true, tipoEvaluacion: true } },
+        varianteEvaluacion: { select: { id: true, nivelObjetivo: true } },
+      },
     }),
     prisma.progresoEstudiante.findMany({
-      where: { estudianteId: estudiante.id, cursoId, porcentajeDominio: { lt: UMBRALES.UMBRAL_AVANZADO } },
+      where: {
+        estudianteId: estudiante.id,
+        OR: [{ asignacionCursoId }, { cursoId }],
+      },
       orderBy: { porcentajeDominio: "asc" },
     }),
+    prisma.historialProgreso.findMany({
+      where: { estudianteId: estudiante.id, asignacionCursoId },
+      orderBy: [{ fecha: "asc" }, { id: "asc" }],
+      select: {
+        id: true, tema: true, porcentaje: true, nota: true,
+        nivelAntes: true, nivelDespues: true, fecha: true,
+        cantidadPreguntas: true, dificultadEvaluacion: true,
+        evaluacionId: true, intentoId: true,
+      },
+    }),
   ]);
-  if (!intentos.length) return {
-    ...estudiante,
-    promedioGeneral: null,
-    promedioNota: null,
-    cantidadEvaluacionesRealizadas: 0,
-    nivelActual: "SIN_EVALUACIONES",
-    nivelLabel: NIVEL_LABEL.SIN_EVALUACIONES,
-    temasPorReforzar: [],
-    ultimaEvaluacion: null,
-  };
-  const promedio = redondear(intentos.reduce((suma, item) => suma + item.porcentaje, 0) / intentos.length);
-  const nivel = determinarNivel(promedio);
-  const ultimo = intentos[0];
+
+  const comparables = intentos.filter((item) => item.evaluacion.tipoEvaluacion !== "FORMATIVA_ADAPTATIVA");
+  const promedio = comparables.length
+    ? redondear(comparables.reduce((suma, item) => suma + item.porcentaje, 0) / comparables.length)
+    : null;
+  const nivelesPorTema = progresos.map((item) => ({
+    tema: item.tema,
+    nivelActual: item.nivelActual,
+    porcentajeDominio: redondear(item.porcentajeDominio),
+    cantidadEvaluaciones: item.cantidadEvaluaciones ?? 0,
+    ultimaActualizacion: item.ultimaActualizacion,
+  }));
+  const temasDominados = nivelesPorTema.filter((item) => item.porcentajeDominio >= UMBRALES.UMBRAL_DOMINIO).map((item) => item.tema);
+  const temasPorReforzar = nivelesPorTema.filter((item) => item.porcentajeDominio < UMBRALES.UMBRAL_DOMINIO).map((item) => item.tema);
+  const ultimo = intentos[0] ?? null;
+  const evolucion = historial.map((item) => ({
+    id: item.id,
+    tema: item.tema,
+    fecha: item.fecha,
+    porcentaje: redondear(item.porcentaje),
+    nota: item.nota,
+    nivelAntes: item.nivelAntes,
+    nivelDespues: item.nivelDespues,
+    cambioNivel: item.nivelAntes !== item.nivelDespues,
+    cantidadPreguntas: item.cantidadPreguntas,
+    dificultadEvaluacion: item.dificultadEvaluacion,
+    evaluacionId: item.evaluacionId,
+    intentoId: item.intentoId,
+  }));
+
   return {
     ...estudiante,
     promedioGeneral: promedio,
-    promedioNota: aNota20(promedio),
+    promedioNota: promedio == null ? null : aNota20(promedio),
     cantidadEvaluacionesRealizadas: intentos.length,
-    nivelActual: nivel,
-    nivelLabel: NIVEL_LABEL[nivel],
-    temasPorReforzar: progresos.map((item) => item.tema),
-    ultimaEvaluacion: {
+    nivelActual: nivelesPorTema[0]?.nivelActual ?? (promedio == null ? "SIN_EVALUACIONES" : determinarNivel(promedio)),
+    nivelLabel: NIVEL_LABEL[nivelesPorTema[0]?.nivelActual] ?? (promedio == null ? NIVEL_LABEL.SIN_EVALUACIONES : NIVEL_LABEL[determinarNivel(promedio)]),
+    nivelesPorTema,
+    temasDominados,
+    temasPorReforzar,
+    evolucion,
+    ultimaEvaluacion: ultimo ? {
       titulo: ultimo.evaluacion.titulo,
       puntaje: ultimo.puntajeTotal,
       porcentaje: redondear(ultimo.porcentaje),
       nota: aNota20(ultimo.porcentaje),
       fechaFin: ultimo.fechaFin,
       intentoId: ultimo.id,
-    },
+      variante: ultimo.varianteEvaluacion,
+      nivelAlRendir: ultimo.nivelAlRendir,
+      nivelPosterior: ultimo.nivelObtenido,
+    } : null,
   };
 };
 
@@ -174,6 +212,35 @@ const rendimientoCurso = async (cursoId) => {
   return { promedioGeneral: aNota20(promedio), promedioPorcentaje: promedio, estudiantesBajoRendimiento, temasConMasErrores, intentosFinalizados: intentos.length };
 };
 
+const seguimientoPorTema = async (asignacionCursoId) => {
+  const progresos = await prisma.progresoEstudiante.findMany({
+    where: { asignacionCursoId },
+    select: { tema: true, nivelActual: true, porcentajeDominio: true },
+    orderBy: { tema: "asc" },
+  });
+  const temas = new Map();
+  for (const progreso of progresos) {
+    const actual = temas.get(progreso.tema) ?? {
+      tema: progreso.tema,
+      BASICO: 0,
+      INTERMEDIO: 0,
+      AVANZADO: 0,
+      estudiantesConRegistro: 0,
+      promedioPorcentaje: 0,
+    };
+    if (actual[progreso.nivelActual] !== undefined) actual[progreso.nivelActual] += 1;
+    actual.estudiantesConRegistro += 1;
+    actual.promedioPorcentaje += Number(progreso.porcentajeDominio ?? 0);
+    temas.set(progreso.tema, actual);
+  }
+  return [...temas.values()].map((item) => ({
+    ...item,
+    promedioPorcentaje: item.estudiantesConRegistro
+      ? redondear(item.promedioPorcentaje / item.estudiantesConRegistro)
+      : 0,
+  }));
+};
+
 const cursosService = {
   async listarMisCursos(usuario) {
     if (usuario.rol === "DOCENTE") {
@@ -219,7 +286,7 @@ const cursosService = {
     });
     const estudiantesBase = await estudiantesSeccion(contexto.asignacionCurso);
     const [estudiantes, rendimiento] = await Promise.all([
-      Promise.all(estudiantesBase.map((item) => statsEstudiante(item, cursoId))),
+      Promise.all(estudiantesBase.map((item) => statsEstudiante(item, cursoId, contexto.asignacionCurso.id))),
       rendimientoCurso(cursoId),
     ]);
     return {
@@ -240,6 +307,7 @@ const cursosService = {
         fechaLimite: ev.fechaLimite, totalPreguntas: ev._count.preguntas, createdAt: ev.createdAt,
       })),
       rendimiento,
+      seguimientoPorTema: await seguimientoPorTema(contexto.asignacionCurso.id),
     };
   },
 

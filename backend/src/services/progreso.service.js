@@ -605,6 +605,34 @@ const progresoService = {
   async obtenerEvolucionAdmin(estudianteId, filtros) {
     return consultarEvolucion(estudianteId, filtros);
   },
+
+  async obtenerResumenAdmin() {
+    const [estudiantes, evaluaciones, historial, niveles, ultimos] = await Promise.all([
+      prisma.usuario.count({ where: { rol: "ESTUDIANTE", estado: "ACTIVO" } }),
+      prisma.intentoEvaluacion.count({ where: { estado: "FINALIZADO" } }),
+      prisma.historialProgreso.count(),
+      prisma.progresoEstudiante.groupBy({ by: ["nivelActual"], _count: { _all: true } }),
+      prisma.historialProgreso.findMany({
+        orderBy: [{ fecha: "desc" }, { id: "desc" }],
+        take: 8,
+        select: {
+          id: true, tema: true, porcentaje: true, nota: true,
+          nivelAntes: true, nivelDespues: true, fecha: true,
+          estudiante: { select: { id: true, nombres: true } },
+        },
+      }),
+    ]);
+    return {
+      soloLectura: true,
+      estudiantesActivos: estudiantes,
+      evaluacionesFinalizadas: evaluaciones,
+      registrosHistoricos: historial,
+      distribucionNiveles: Object.fromEntries(
+        niveles.map((item) => [item.nivelActual, item._count._all]),
+      ),
+      ultimosCambios: ultimos,
+    };
+  },
 };
 
 module.exports = progresoService;

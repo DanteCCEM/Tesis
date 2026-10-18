@@ -27,6 +27,7 @@ import PerfilEstudiante from './pages/estudiante/PerfilEstudiante.jsx'
 import GestionUsuarios from './pages/admin/GestionUsuarios.jsx'
 import AdminAsignaciones from './pages/admin/Asignaciones.jsx'
 import AdminPlaceholder from './pages/admin/AdminPlaceholder.jsx'
+import AdminDashboard from './pages/admin/Dashboard.jsx'
 
 function AppRoutes() {
   const location = useLocation()
@@ -79,7 +80,7 @@ function AppRoutes() {
 
       <Route element={<ProtectedRoute role="ADMIN" />}>
         <Route element={<AppLayout role="admin" />}>
-          <Route path="/admin/dashboard" element={<AdminPlaceholder title="Dashboard" />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/docentes" element={<GestionUsuarios tipo="docentes" />} />
           <Route path="/admin/estudiantes" element={<GestionUsuarios tipo="estudiantes" />} />
           <Route path="/admin/estructura-academica" element={<AdminPlaceholder title="Estructura académica" />} />

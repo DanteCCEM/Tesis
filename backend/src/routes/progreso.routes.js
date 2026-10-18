@@ -33,4 +33,10 @@ router.get(
   progresoController.evolucionAdmin,
 );
 
+router.get(
+  "/admin/resumen",
+  autorizarRoles("ADMIN"),
+  progresoController.resumenAdmin,
+);
+
 module.exports = router;
