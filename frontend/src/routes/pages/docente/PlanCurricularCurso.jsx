@@ -20,7 +20,9 @@ const ESTADOS_TEMA = [
 const MAX_PDF_MB = 10
 const MAX_PDF_BYTES = MAX_PDF_MB * 1024 * 1024
 
-const uid = () => `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+// Solo se usa como clave efímera de React durante la edición local. `randomUUID`
+// evita colisiones sin que el identificador se convierta en un dato de dominio.
+const uid = () => `tmp-${crypto.randomUUID()}`
 
 function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
